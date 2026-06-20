@@ -1,0 +1,340 @@
+# Teamwork Physiotherapy Centre International - Backend Development Rules
+
+## 🎯 Project Overview
+This is a comprehensive healthcare management system backend built with Node.js, Express, TypeScript, Prisma, and PostgreSQL. The system follows enterprise-grade patterns and healthcare compliance standards.
+
+## 🏗️ Architecture Patterns
+
+### API Design Standards
+- **RESTful APIs**: Follow REST conventions with proper HTTP methods
+- **Versioning**: All APIs use `/api/v1/` prefix for versioning
+- **Consistent Response Format**: All responses follow the standard format:
+  ```typescript
+  {
+    success: boolean;
+    message: string;
+    data?: any;
+    errors?: string[];
+  }
+  ```
+
+### URL Structure Standards
+- **Base URL**: `http://51.20.55.20:3007/api/v1`
+- **Endpoint Naming**: Use kebab-case for multi-word endpoints
+- **Resource Hierarchy**: Follow logical resource hierarchy
+- **ID Parameters**: Use `:id` for resource identifiers
+
+### File Organization
+```
+src/
+├── controllers/     # HTTP request handlers
+├── services/        # Business logic layer
+├── middleware/      # Express middleware
+├── routes/          # API route definitions
+├── validators/      # Input validation schemas
+├── utils/           # Utility functions
+├── config/          # Configuration files
+└── types/           # TypeScript type definitions
+```
+
+## 🔐 Authentication & Authorization
+
+### JWT Token Management
+- **Access Tokens**: 15-minute expiry with user payload
+- **Refresh Tokens**: 7-day expiry with rotation
+- **Token Storage**: Store in HTTP-only cookies (preferred) or localStorage
+- **Token Refresh**: Automatic refresh on 401 responses
+
+### Session Management
+- **Session Tracking**: Track active sessions with device info
+- **Session Revocation**: Support individual and bulk session revocation
+- **Device Tracking**: Log IP address and user agent
+
+### Role-Based Access Control (RBAC)
+- **Roles**: admin, nurse, patient, physiotherapist, clinical-psychologist, nutritionist, critical-care-nurse, medical-doctor, geriatrician, palliative-care-specialist, senior-midwife
+- **Authorization Middleware**: Use `authorize()` for role-based access
+- **Resource Ownership**: Use `requireOwnership()` for user resource access
+
+## 📊 Database Standards
+
+### Prisma Schema Patterns
+- **Naming**: Use PascalCase for models, camelCase for fields
+- **Relationships**: Define proper foreign key relationships
+- **Soft Deletes**: Use `deletedAt` field for soft deletes
+- **Timestamps**: Include `createdAt` and `updatedAt` on all models
+- **Indexes**: Add appropriate indexes for performance
+
+### Database Operations
+- **Transactions**: Use Prisma transactions for multi-table operations
+- **Error Handling**: Proper error handling for database operations
+- **Validation**: Validate data before database operations
+
+## 🛡️ Security Standards
+
+### Input Validation
+- **Joi Schemas**: Use Joi for comprehensive input validation
+- **Sanitization**: Sanitize all user inputs
+- **Type Safety**: Use TypeScript for compile-time type checking
+
+### Rate Limiting
+- **Per-Endpoint**: Different rate limits for different endpoints
+- **Authentication**: Stricter limits for auth endpoints
+- **IP-Based**: Rate limit by IP address
+
+### Error Handling
+- **Custom Errors**: Use custom error classes
+- **Error Logging**: Log all errors with context
+- **User-Friendly Messages**: Don't expose internal errors to users
+
+## 📝 API Documentation Standards
+
+### Endpoint Documentation
+- **JSDoc Comments**: Document all endpoints with JSDoc
+- **Request/Response Examples**: Include example requests and responses
+- **Error Codes**: Document all possible error responses
+
+### Postman Collection
+- **Environment Variables**: Use environment variables for base URL and tokens
+- **Test Scripts**: Include test scripts for response validation
+- **Pre-request Scripts**: Auto-set authentication tokens
+
+## 🔄 Frontend Integration Standards
+
+### API Service Layer
+- **Centralized Configuration**: All API endpoints in `src/config/api.ts`
+- **Service Classes**: Create service classes for each domain
+- **Error Handling**: Consistent error handling across services
+- **Type Safety**: Use TypeScript interfaces for all API responses
+
+### State Management
+- **Context API**: Use React Context for global state
+- **Local Storage**: Store user data and tokens in localStorage
+- **Session Management**: Integrate session management in auth context
+
+## 🧪 Testing Standards
+
+### Unit Tests
+- **Service Layer**: Test all service methods
+- **Controller Layer**: Test all controller methods
+- **Utility Functions**: Test all utility functions
+
+### Integration Tests
+- **API Endpoints**: Test all API endpoints
+- **Database Operations**: Test database operations
+- **Authentication Flow**: Test complete authentication flow
+
+## 📈 Performance Standards
+
+### Database Optimization
+- **Connection Pooling**: Use connection pooling
+- **Query Optimization**: Optimize database queries
+- **Indexing**: Add appropriate database indexes
+
+### Caching
+- **Token Caching**: Cache frequently accessed tokens
+- **Query Caching**: Cache expensive database queries
+
+## 🏥 Healthcare Compliance
+
+### Data Protection
+- **HIPAA Compliance**: Follow HIPAA guidelines
+- **Audit Logging**: Log all data access and modifications
+- **Data Encryption**: Encrypt sensitive data at rest and in transit
+
+### Security Measures
+- **Input Validation**: Strict input validation
+- **SQL Injection Prevention**: Use Prisma ORM
+- **XSS Prevention**: Sanitize all user inputs
+
+## 🚀 Deployment Standards
+
+### Environment Configuration
+- **Environment Variables**: Use environment variables for configuration
+- **Secrets Management**: Store secrets securely
+- **Database Migrations**: Use Prisma migrations
+
+### Monitoring
+- **Health Checks**: Implement health check endpoints
+- **Logging**: Comprehensive logging system
+- **Error Tracking**: Track and monitor errors
+
+## 📋 Code Quality Standards
+
+### TypeScript
+- **Strict Mode**: Use strict TypeScript configuration
+- **Type Definitions**: Define types for all data structures
+- **Interface Segregation**: Use focused interfaces
+
+### Code Style
+- **ESLint**: Use ESLint for code linting
+- **Prettier**: Use Prettier for code formatting
+- **Consistent Naming**: Follow consistent naming conventions
+
+## 🔧 Development Workflow
+
+### Git Workflow
+- **Feature Branches**: Use feature branches for development
+- **Commit Messages**: Use conventional commit messages
+- **Code Reviews**: Require code reviews for all changes
+
+### API Development Process
+1. **Design**: Design API endpoints and data structures
+2. **Schema**: Create Prisma schema updates
+3. **Validation**: Create Joi validation schemas
+4. **Service**: Implement business logic in services
+5. **Controller**: Implement HTTP handlers in controllers
+6. **Routes**: Define API routes
+7. **Testing**: Write tests for all components
+8. **Documentation**: Update API documentation
+9. **Frontend Integration**: Update frontend services
+
+## 📚 Common Patterns
+
+### Error Handling Pattern
+```typescript
+try {
+  // Business logic
+  const result = await service.method();
+  res.status(200).json({
+    success: true,
+    message: 'Operation successful',
+    data: result
+  });
+} catch (error) {
+  next(error);
+}
+```
+
+### Validation Pattern
+```typescript
+const validateRequest = (schema: Joi.ObjectSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const { error } = schema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.details.map(detail => detail.message)
+      });
+    }
+    next();
+  };
+};
+```
+
+### Service Pattern
+```typescript
+export class ServiceName {
+  static async methodName(params: any): Promise<ResultType> {
+    try {
+      // Business logic
+      const result = await prisma.model.operation();
+      return result;
+    } catch (error) {
+      logger.error('Service error:', error);
+      throw new CustomError('Service error message', 500);
+    }
+  }
+}
+```
+
+## 🎯 Success Criteria
+
+### API Implementation
+- ✅ All endpoints return consistent response format
+- ✅ Proper error handling and status codes
+- ✅ Input validation on all endpoints
+- ✅ Authentication and authorization
+- ✅ Rate limiting on sensitive endpoints
+- ✅ Comprehensive logging
+
+### Frontend Integration
+- ✅ Centralized API configuration
+- ✅ Service layer for all API calls
+- ✅ Error handling in UI
+- ✅ Loading states and user feedback
+- ✅ Type-safe API calls
+
+### Documentation
+- ✅ Complete API documentation
+- ✅ Postman collection with examples
+- ✅ Code comments and JSDoc
+- ✅ README with setup instructions
+
+Remember: Always prioritize security, performance, and maintainability in healthcare applications. Follow these patterns consistently to ensure code quality and team productivity.
+
+## ✅ Backend Coding Rules
+
+To avoid regressions and keep the backend compatible with our strict TypeScript configuration (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, etc.), every new or updated backend file **must** obey the following:
+
+- **Validate all inputs**: Run bodies/queries through Joi schemas (create one if missing) and cast results to typed DTOs before hitting services.
+- **Explicit ID handling**: Extract route params with helpers such as `requireParamId()` so missing values throw `CustomError('Invalid ...', 400 or 404)`.
+- **Numeric parsing**: Convert query string numbers via `Number.parseInt` (or shared `parseNumber`) and provide defaults—never pass raw strings to Prisma/services.
+- **Enum normalization**: Map user-provided strings to Prisma enums via lookup helpers; reject unknown values with a 400 `CustomError`.
+- **Prisma JSON safety**: When persisting JSON, coerce to `Prisma.InputJsonObject/InputJsonValue` using helper functions; do not spread untyped `any/unknown` objects.
+- **Existence checks before updates**: Fetch the target record first; if not found, throw `CustomError('… not found', 404)` before `update`/`delete`.
+- **Consistent `CustomError` usage**: Always call `new CustomError('message', statusCode)` (message first, status second).
+- **Guard `unknown` errors**: Wrap caught errors with a `toError()` helper (or `instanceof Error`) before logging/accessing `.message`.
+- **SystemConfig discipline**: Provide `category` on every create/upsert, and sanitize stored JSON.
+- **No unchecked spreads**: Use mapper functions to construct response objects explicitly; avoid `...record.value` when TypeScript expects strict optional handling.
+- **Conditional optional fields**: Assign optional props only when defined—don't pass `undefined` to Prisma columns that aren't optional.
+- **Optional properties with `exactOptionalPropertyTypes: true`**: 
+  - **NEVER** assign `undefined` to optional properties in TypeScript interfaces/types
+  - **ALWAYS** use conditional assignment: Only include optional properties when they have actual values
+  - **Pattern to follow**:
+    ```typescript
+    // ❌ WRONG - This will fail with exactOptionalPropertyTypes: true
+    return {
+      ...data,
+      optionalField: value ? value : undefined,  // Don't do this!
+    };
+    
+    // ✅ CORRECT - Only include property when it has a value
+    const result: TypeWithOptional = {
+      ...data,
+      // required fields
+    };
+    if (value) {
+      result.optionalField = value;  // Only assign when defined
+    }
+    return result;
+    ```
+  - **When enriching data**: If you're adding optional nested objects (e.g., `patient`, `specialist`), create the result object first, then conditionally add the optional properties using `if` checks
+  - **Type safety**: Always type the result object explicitly (e.g., `const result: MyType = { ... }`) to catch these issues at compile time
+- **TSC gate**: Run `npx tsc --noEmit --pretty false --project tsconfig.json` (or `npm run lint`) before committing or merging backend changes.
+- **No code comments**: Do NOT add comments to code. Code should be self-documenting through clear variable names, function names, and structure. If you encounter existing comments in files, remove them. Only exception: JSDoc comments for public API documentation if explicitly required.
+
+Following these rules keeps ts-node boot clean and prevents the TypeScript issues we just resolved.
+
+---
+
+## 🚨 Rules to prevent server crashes (TypeScript / optional fields)
+
+When changing code that affects types or optional fields, follow these rules so the backend does not crash on startup (ts-node compile or runtime).
+
+### 1. Making a model field optional (e.g. Prisma `String?`)
+
+If you add or change a Prisma field to optional (e.g. `email String?`), update **in one pass** so the app still compiles and runs:
+
+- **Validators (Joi):** Use `.allow('', null).optional()` and coerce empty string to null if needed; never keep `.required()` for that field.
+- **Services (create/update):** For create payloads, use `field: value ?? undefined` (or omit when undefined). For duplicate checks (e.g. findUnique by that field), only run the check when the value is defined; otherwise skip or return early.
+- **Prisma create/update:** Use `value ?? undefined` or type assertion (e.g. `as Prisma.XUncheckedCreateInput`) if the generated type does not yet reflect optional. Never pass `null` into Prisma where the generated type expects `string | undefined` unless the schema allows null.
+- **Auth / JWT:** If the field is stored in the JWT payload (e.g. email), update the payload type to `field?: string | undefined` so it accepts undefined. When building the payload, either omit the key when undefined or use conditional spread: `...(value != null && value !== '' ? { field: value } : {})`.
+- **Express Request (req.user):** If you extend Express Request with user info, optional fields must be `field?: string | undefined`. When assigning to `req.user`, **do not** set `email: payload.email` if payload.email can be undefined; use conditional spread so the property is only present when defined: `...(payload.email != null && payload.email !== '' ? { email: payload.email } : {})`.
+- **Any Prisma `where` using the field:** If the variable can be `null` (e.g. from a nullable User/Patient field), guard before the query: `if (value == null) return ...;` then use `value` in `where: { field: value }`. Do not pass `string | null` into Prisma where the type expects `string | undefined`.
+
+### 2. exactOptionalPropertyTypes: true (already in tsconfig)
+
+- **Never** assign `undefined` to an optional property in an object literal when the type is `prop?: string` (without `| undefined`). TypeScript will error: "Type 'undefined' is not assignable to type 'string'."
+- **Correct patterns:** (a) Omit the key when the value is undefined; (b) Use conditional spread: `...(value != null ? { prop: value } : {})`; (c) Or type the optional property as `prop?: string | undefined` so explicit undefined is allowed.
+- When in doubt, only include optional properties when they have a defined value (use `if (value) result.prop = value` or spread with a conditional).
+
+### 3. Prisma: null vs undefined
+
+- Prisma generated types for optional filters often use `string | undefined`, not `string | null`. If you have a value that can be `null` (e.g. from DB or optional field), convert before passing to Prisma: use `value ?? undefined` or guard `if (value == null) return ...;` then use `value`.
+
+### 4. Before committing or deploying backend
+
+- Run **`npx tsc --noEmit`** in the backend root. Fix any TypeScript errors; do not push if it fails.
+- Optionally run **`npm run dev`** and check the dev server output to confirm the app starts without "Unable to compile TypeScript" or "app crashed".
+- This prevents the server from crashing on startup after a deploy.
