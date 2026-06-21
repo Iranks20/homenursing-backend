@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm run db:generate && npm run build"
+
+[deploy]
+preDeployCommand = "npm run db:migrate:prod"
+startCommand = "npm start"
+restartPolicyType = "on_failure"
