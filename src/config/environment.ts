@@ -13,13 +13,14 @@ const requiredEnv = (key: string): string => {
 const parseCorsOrigins = (value?: string): string[] => {
   if (!value) {
     return [
-      'http://44.192.24.24',
+      'https://homenursing-frontend-production.up.railway.app',
+      'https://homenursing-backend-production.up.railway.app',
       'https://teamworkphysiointernational.com',
       'https://www.teamworkphysiointernational.com',
+      'http://localhost:5291',
       'http://localhost:5173',
       'http://localhost:3000',
-      'http://51.20.55.20:3007',
-      'http://51.20.98.153',
+      'http://localhost:3847',
     ];
   }
 
