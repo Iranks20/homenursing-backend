@@ -127,6 +127,21 @@ export class HiringEmailService {
     });
   }
 
+  static async sendInterviewPassed(input: { name: string; email: string }): Promise<boolean> {
+    const body = `
+      <p>Dear ${input.name},</p>
+      <p>Congratulations — you passed your physical interview.</p>
+      <p>Your final step is to pay the certificate fee to receive your official nursing qualification certificate.</p>
+      <p><a href="${progressUrl()}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Pay and get your certificate</a></p>
+    `;
+    return EmailService.send({
+      to: { email: input.email, name: input.name },
+      subject: 'Interview passed — pay for your certificate',
+      html: layout('Interview passed', body),
+      text: `Dear ${input.name}, you passed your interview. Pay for your certificate at ${progressUrl()}`,
+    });
+  }
+
   static async sendCertified(input: { name: string; email: string }): Promise<boolean> {
     const body = `
       <p>Dear ${input.name},</p>

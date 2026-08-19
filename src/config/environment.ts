@@ -10,6 +10,22 @@ const requiredEnv = (key: string): string => {
   return value;
 };
 
+export const isPesapalLiveEnv = (value?: string): boolean => {
+  const env = (value ?? process.env.PESAPAL_ENV ?? 'sandbox').toLowerCase();
+  return env === 'production' || env === 'live';
+};
+
+const defaultApiPublicUrl = (): string => {
+  if (process.env.API_PUBLIC_URL?.trim()) {
+    return process.env.API_PUBLIC_URL.trim().replace(/\/$/, '');
+  }
+  const port = process.env.PORT || '3847';
+  return `http://localhost:${port}`;
+};
+
+const apiPublicUrl = defaultApiPublicUrl();
+const pesapalLive = isPesapalLiveEnv(process.env.PESAPAL_ENV);
+
 const parseCorsOrigins = (value?: string): string[] => {
   if (!value) {
     return [
@@ -57,6 +73,25 @@ export const ENV_CONFIG = {
   BREVO_SENDER_EMAIL: process.env.BREVO_SENDER_EMAIL || '',
   BREVO_SENDER_NAME: process.env.BREVO_SENDER_NAME || 'Teamwork Home Nursing',
   APP_URL: (process.env.APP_URL || 'http://localhost:5291').replace(/\/$/, ''),
+  API_PUBLIC_URL: apiPublicUrl,
+
+  PESAPAL_CONSUMER_KEY: process.env.PESAPAL_CONSUMER_KEY || '',
+  PESAPAL_CONSUMER_SECRET: process.env.PESAPAL_CONSUMER_SECRET || '',
+  PESAPAL_ENV: process.env.PESAPAL_ENV || 'sandbox',
+  PESAPAL_IPN_NOTIFICATION_ID: process.env.PESAPAL_IPN_NOTIFICATION_ID || '',
+  PESAPAL_COUNTRY_CODE: process.env.PESAPAL_COUNTRY_CODE || 'UG',
+  PESAPAL_API_BASE_URL:
+    process.env.PESAPAL_API_BASE_URL ||
+    (pesapalLive ? 'https://pay.pesapal.com/v3/api' : 'https://cybqa.pesapal.com/pesapalv3/api'),
+  PESAPAL_CALLBACK_URL:
+    process.env.PESAPAL_CALLBACK_URL || `${apiPublicUrl}/api/v1/payments/pesapal/callback`,
+  PESAPAL_IPN_URL: process.env.PESAPAL_IPN_URL || `${apiPublicUrl}/api/v1/payments/pesapal/ipn`,
+
+  CERTIFICATE_FEE_AMOUNT: parseFloat(process.env.CERTIFICATE_FEE_AMOUNT || '150000'),
+  CERTIFICATE_FEE_CURRENCY: process.env.CERTIFICATE_FEE_CURRENCY || 'UGX',
+  CERTIFICATE_FEE_DESCRIPTION: process.env.CERTIFICATE_FEE_DESCRIPTION || 'Nursing qualification certificate fee',
+  CERTIFICATE_SIGNATORY_NAME: process.env.CERTIFICATE_SIGNATORY_NAME || 'Training Director',
+  CERTIFICATE_SIGNATORY_TITLE: process.env.CERTIFICATE_SIGNATORY_TITLE || 'Teamwork Home Nursing',
 
   // SMS Configuration
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || '',

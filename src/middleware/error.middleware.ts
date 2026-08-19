@@ -86,13 +86,13 @@ export const errorHandler = (
   });
 
   // Don't leak error details in production, but show more in development
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const exposeErrorDetails = process.env.EXPOSE_ERROR_DETAILS === 'true';
   
   const errorResponse: any = {
     success: false,
     error: {
-      message: isDevelopment ? message : (statusCode === 500 ? 'Internal Server Error' : message),
-      ...(isDevelopment && { 
+      message: statusCode === 500 ? 'Internal Server Error' : message,
+      ...(exposeErrorDetails && { 
         stack,
         details: {
           statusCode,

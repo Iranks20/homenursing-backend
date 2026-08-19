@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
+import path from 'path';
+import fs from 'fs';
 import {
   ExamService,
   CreateExamData,
@@ -234,6 +236,33 @@ export class ExamController {
 
       const certificate = await ExamService.getCertificateById(certificateId, requesterId, requesterRole);
       res.status(200).json({ success: true, data: certificate });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async downloadCertificatePdf(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const certificateId = requireId(req.params.id, 'Certificate');
+      const requesterId = requireUserId(req);
+      const requesterRole = (req as Request & { user?: { role?: string } }).user?.role ?? 'NURSE';
+
+      const certificate = await ExamService.getCertificateById(certificateId, requesterId, requesterRole);
+      const metadata =
+        certificate.metadata && typeof certificate.metadata === 'object' && !Array.isArray(certificate.metadata)
+          ? (certificate.metadata as Record<string, unknown>)
+          : {};
+      const pdfPath = typeof metadata.pdfPath === 'string' ? metadata.pdfPath : null;
+      if (!pdfPath) {
+        throw new CustomError('Certificate PDF is not available yet', 404);
+      }
+
+      const absolutePath = path.join(process.cwd(), pdfPath.replace(/^\//, ''));
+      if (!fs.existsSync(absolutePath)) {
+        throw new CustomError('Certificate PDF file not found', 404);
+      }
+
+      res.download(absolutePath, `certificate-${certificate.certificateNumber}.pdf`);
     } catch (error) {
       next(error);
     }

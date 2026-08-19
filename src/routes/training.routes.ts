@@ -35,6 +35,7 @@ router.get('/attempts', requireRole(['ADMIN', 'TRAINER', 'NURSE', 'APPLICANT']),
 router.get('/attempts/:id', requireRole(['ADMIN', 'TRAINER', 'NURSE', 'APPLICANT']), ExamController.getAttemptById);
 router.get('/certificates', requireExamManager, ExamController.getCertificates);
 router.get('/certificates/mine', requireExamTaker, ExamController.getMyCertificates);
+router.get('/certificates/:id/pdf', requireRole(['ADMIN', 'TRAINER', 'NURSE', 'APPLICANT']), ExamController.downloadCertificatePdf);
 router.get('/certificates/:id', requireRole(['ADMIN', 'TRAINER', 'NURSE', 'APPLICANT']), ExamController.getCertificateById);
 router.post('/certificates/:id/approve', requireExamManager, ExamController.approveCertificate);
 

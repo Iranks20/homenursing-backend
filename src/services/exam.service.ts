@@ -555,7 +555,8 @@ export class ExamService {
 
     logger.info('Exam attempt submitted', { attemptId, score, passed });
 
-    return this.formatAttempt(updated);
+    const formatted = this.formatAttempt(updated);
+    return this.maskAttemptCertificateForApplicant(updated.userId, formatted);
   }
 
   static async getAttempts(
@@ -632,7 +633,44 @@ export class ExamService {
       throw new CustomError('You can only view your own attempts', 403);
     }
 
-    return this.formatAttempt(attempt);
+    const formatted = this.formatAttempt(attempt);
+    return this.maskAttemptCertificateForApplicant(attempt.userId, formatted);
+  }
+
+  private static async applicantHasPaidCertificateAccess(userId: string): Promise<boolean> {
+    const application = await prisma.nurseApplication.findUnique({
+      where: { userId },
+      select: { status: true },
+    });
+    if (!application) {
+      return true;
+    }
+    return (
+      application.status === NurseApplicationStatus.CERTIFIED ||
+      application.status === NurseApplicationStatus.RECRUITED
+    );
+  }
+
+  private static async assertApplicantCertificateAccess(userId: string, requesterRole: string): Promise<void> {
+    if (requesterRole !== 'APPLICANT') {
+      return;
+    }
+    const allowed = await this.applicantHasPaidCertificateAccess(userId);
+    if (!allowed) {
+      throw new CustomError('Certificate is available after certificate fee payment', 403);
+    }
+  }
+
+  private static async maskAttemptCertificateForApplicant(
+    userId: string,
+    attempt: AttemptRecord
+  ): Promise<AttemptRecord> {
+    const allowed = await this.applicantHasPaidCertificateAccess(userId);
+    if (allowed || !attempt.certificate) {
+      return attempt;
+    }
+    const { certificate: _certificate, ...rest } = attempt;
+    return rest;
   }
 
   static async getCertificates(
@@ -692,6 +730,8 @@ export class ExamService {
       throw new CustomError('Access denied', 403);
     }
 
+    await this.assertApplicantCertificateAccess(requesterId, requesterRole);
+
     return this.formatCertificate(certificate);
   }
 
@@ -728,6 +768,11 @@ export class ExamService {
     const where: any = { userId };
     if (status) {
       where.status = status;
+    }
+
+    const allowed = await this.applicantHasPaidCertificateAccess(userId);
+    if (!allowed) {
+      return [];
     }
 
     const certificates = await prisma.trainingExamCertificate.findMany({

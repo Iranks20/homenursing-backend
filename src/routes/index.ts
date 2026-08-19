@@ -11,9 +11,13 @@ import settingsRoutes from './settings.routes';
 import trainingRoutes from './training.routes';
 import applicationRoutes from './application.routes';
 import supervisionRoutes from './supervision.routes';
+import appointmentRoutes from './appointment.routes';
+import serviceRoutes from './service.routes';
+import specializationRoutes from './specialization.routes';
 import labRoutes from './lab.routes';
 import referralRoutes from './referral.routes';
 import staffPaymentRoutes from './staffPayment.routes';
+import certificatePaymentRoutes from './certificatePayment.routes';
 
 const router = Router();
 
@@ -90,6 +94,7 @@ router.get('/v1', (req, res) => {
       lab: '/api/v1/lab/*',
       referrals: '/api/v1/referrals/*',
       staffPayments: '/api/v1/staff-payments/*',
+      payments: '/api/v1/payments/*',
     },
   });
 });
@@ -98,6 +103,9 @@ router.use('/v1/auth', authRoutes);
 router.use('/v1/users', userRoutes);
 router.use('/v1/patients', patientRoutes);
 router.use('/v1/nurses', nurseRoutes);
+router.use('/v1/appointments', appointmentRoutes);
+router.use('/v1/services', serviceRoutes);
+router.use('/v1/specializations', specializationRoutes);
 router.use('/v1/health-records', healthRecordRoutes);
 router.use('/v1/notifications', notificationRoutes);
 router.use('/v1/upload', uploadRoutes);
@@ -108,5 +116,6 @@ router.use('/v1/supervision', supervisionRoutes);
 router.use('/v1/lab', labRoutes);
 router.use('/v1/referrals', referralRoutes);
 router.use('/v1/staff-payments', staffPaymentRoutes);
+router.use('/v1/payments', certificatePaymentRoutes);
 
 export default router;

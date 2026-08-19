@@ -47,6 +47,7 @@ export class NurseService {
 
     const usernameNormalized = (data.username || '').trim().toLowerCase();
     if (!usernameNormalized) throw new CustomError('Username is required', 400);
+    if (!data.payFrequency) throw new CustomError('Pay frequency is required', 400);
     const existingByUsername = await prisma.user.findUnique({ where: { username: usernameNormalized } });
     if (existingByUsername) throw new CustomError('Username is already taken', 409);
 
@@ -63,7 +64,7 @@ export class NurseService {
         isVerified: true,
         email: emailVal,
         licenseNumber: licenseForUser,
-        payFrequency: data.payFrequency ?? null,
+        payFrequency: data.payFrequency,
         workStartDate: data.workStartDate ?? new Date(data.hireDate),
         ...(data.dateOfBirth ? { dateOfBirth: new Date(data.dateOfBirth) } : {}),
       } as Prisma.UserCreateInput,
@@ -90,13 +91,28 @@ export class NurseService {
   }
 
   static async getNurseById(id: string): Promise<Nurse | null> {
-    return prisma.nurse.findUnique({
+    const nurse = await prisma.nurse.findUnique({
       where: { id },
       include: {
         appointments: true,
         schedules: true,
       }
     });
+    if (!nurse) {
+      return null;
+    }
+    const linkedUser = nurse.email
+      ? await prisma.user.findFirst({
+          where: { email: nurse.email, role: UserRole.NURSE },
+          select: { username: true, payFrequency: true, workStartDate: true },
+        })
+      : null;
+    return {
+      ...nurse,
+      username: linkedUser?.username ?? null,
+      payFrequency: linkedUser?.payFrequency ?? null,
+      workStartDate: linkedUser?.workStartDate ?? null,
+    } as Nurse;
   }
 
   static async getNurses(page = 1, limit = 10) {
@@ -110,8 +126,31 @@ export class NurseService {
       prisma.nurse.count()
     ]);
 
+    const nurseEmails = nurses
+      .map((nurse) => nurse.email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email));
+    const linkedUsers = nurseEmails.length
+      ? await prisma.user.findMany({
+          where: { role: UserRole.NURSE, email: { in: nurseEmails } },
+          select: { email: true, username: true, payFrequency: true, workStartDate: true },
+        })
+      : [];
+    const usersByEmail = new Map(
+      linkedUsers.map((user) => [user.email?.trim().toLowerCase() ?? '', user])
+    );
+    const enrichedNurses = nurses.map((nurse) => {
+      const lookupEmail = nurse.email?.trim().toLowerCase() ?? '';
+      const linkedUser = usersByEmail.get(lookupEmail);
+      return {
+        ...nurse,
+        username: linkedUser?.username ?? null,
+        payFrequency: linkedUser?.payFrequency ?? null,
+        workStartDate: linkedUser?.workStartDate ?? null,
+      };
+    });
+
     return {
-      nurses,
+      nurses: enrichedNurses,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 }
     };
   }
@@ -149,6 +188,9 @@ export class NurseService {
     }
     if (data.avatar !== undefined) updateData.avatar = data.avatar;
     if (data.status !== undefined) updateData.status = data.status;
+    if (data.payFrequency === null) {
+      throw new CustomError('Pay frequency is required', 400);
+    }
 
     const nurse = await prisma.nurse.update({ where: { id }, data: updateData });
 

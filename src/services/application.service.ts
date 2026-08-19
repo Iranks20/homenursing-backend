@@ -56,14 +56,9 @@ const applicationInclude = {
   },
 };
 
-function generateCertificateNumber(): string {
-  const randomSegment = Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, '0');
-  return `CERT-${Date.now()}-${randomSegment}`;
-}
+type ApplicationRecord = Prisma.NurseApplicationGetPayload<{ include: typeof applicationInclude }>;
 
-function formatApplication(record: any) {
+function formatApplication(record: ApplicationRecord) {
   return {
     id: record.id,
     userId: record.userId,
@@ -74,7 +69,7 @@ function formatApplication(record: any) {
     experience: record.experience ?? undefined,
     message: record.message ?? undefined,
     qualificationDocuments: Array.isArray(record.qualificationDocuments)
-      ? (record.qualificationDocuments as QualificationDocumentRecord[])
+      ? (record.qualificationDocuments as unknown as QualificationDocumentRecord[])
       : undefined,
     qualificationDriveLink: record.qualificationDriveLink ?? undefined,
     status: record.status,
@@ -364,83 +359,25 @@ export class ApplicationService {
       throw new CustomError('No passed exam attempt linked to this application', 400);
     }
 
-    const attempt = application.passedAttempt;
-    const score = attempt.score ?? 0;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.trainingExamCertificate.upsert({
-        where: { attemptId: attempt.id },
-        create: {
-          examId: attempt.examId,
-          attemptId: attempt.id,
-          userId: application.userId,
-          score,
-          certificateNumber: generateCertificateNumber(),
-          status: 'APPROVED',
-          approvedAt: new Date(),
-          approvedById: reviewerId,
-          metadata: {
-            candidateName: application.name,
-            examTitle: attempt.exam.title,
-            score,
-            interviewPassedAt: new Date().toISOString(),
-          },
-        },
-        update: {
-          status: 'APPROVED',
-          approvedAt: new Date(),
-          approvedById: reviewerId,
-        },
-      });
-
-      await tx.user.update({
-        where: { id: application.userId },
-        data: { role: UserRole.NURSE },
-      });
-
-      await tx.nurse.upsert({
-        where: { email: application.email },
-        create: {
-          name: application.name,
-          email: application.email,
-          phone: application.phone,
-          licenseNumber: application.licenseNumber ?? 'PENDING',
-          specialization: 'General Nursing',
-          experience: application.experience ?? 0,
-          status: 'ACTIVE',
-          hireDate: new Date(),
-        },
-        update: {
-          name: application.name,
-          phone: application.phone,
-          status: 'ACTIVE',
-        },
-      });
-
-      await tx.nurseApplication.update({
-        where: { id: applicationId },
-        data: {
-          status: NurseApplicationStatus.CERTIFIED,
-          interviewNotes: notes?.trim() || null,
-          reviewedById: reviewerId,
-          reviewedAt: new Date(),
-        },
-      });
-    });
-
-    const updated = await prisma.nurseApplication.findUnique({
+    const updated = await prisma.nurseApplication.update({
       where: { id: applicationId },
+      data: {
+        status: NurseApplicationStatus.INTERVIEW_PASSED,
+        interviewNotes: notes?.trim() || null,
+        reviewedById: reviewerId,
+        reviewedAt: new Date(),
+      },
       include: applicationInclude,
     });
 
-    logger.info('Interview passed and candidate certified', { applicationId, userId: application.userId });
+    logger.info('Interview passed; awaiting certificate payment', { applicationId, userId: application.userId });
 
-    void HiringEmailService.sendCertified({
+    void HiringEmailService.sendInterviewPassed({
       name: application.name,
       email: application.email,
     });
 
-    return formatApplication(updated!);
+    return formatApplication(updated);
   }
 
   static async markRecruited(applicationId: string, recruiterId: string) {

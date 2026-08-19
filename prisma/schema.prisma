@@ -44,6 +44,7 @@ model User {
   examCertificatesApproved TrainingExamCertificate[] @relation("CertificateApprover")
   nurseApplication         NurseApplication?
   reviewedApplications     NurseApplication[]        @relation("ApplicationReviewer")
+  certificatePayments      NurseCertificatePayment[]
   // Patient assignments
   assignedPatients         Patient[]                 @relation("AssignedSpecialist")
   referredPatients         Patient[]                 @relation("AssignedTherapist")
@@ -811,8 +812,38 @@ model NurseApplication {
   user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   passedAttempt        TrainingExamAttempt?   @relation(fields: [passedAttemptId], references: [id])
   reviewedBy           User?                  @relation("ApplicationReviewer", fields: [reviewedById], references: [id])
+  certificatePayments  NurseCertificatePayment[]
 
   @@map("nurse_applications")
+}
+
+model NurseCertificatePayment {
+  id                String                   @id @default(cuid())
+  applicationId     String
+  userId            String
+  amount            Float
+  currency          String                   @default("UGX")
+  merchantReference String                   @unique
+  orderTrackingId   String?                  @unique
+  status            CertificatePaymentStatus @default(PENDING)
+  redirectUrl       String?
+  paymentMethod     String?
+  paidAt            DateTime?
+  metadata          Json?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  application       NurseApplication         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, status])
+  @@map("nurse_certificate_payments")
+}
+
+enum CertificatePaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
 
 enum NurseApplicationStatus {
