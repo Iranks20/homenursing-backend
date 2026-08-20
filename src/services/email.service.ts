@@ -7,54 +7,78 @@ export interface EmailRecipient {
   name?: string;
 }
 
-export interface SendEmailInput {
+export interface SendTemplateEmailInput {
   to: EmailRecipient;
-  subject: string;
-  html: string;
-  text?: string;
+  templateId: string;
+  params: Record<string, string>;
 }
 
 export class EmailService {
   static isConfigured(): boolean {
-    return Boolean(ENV_CONFIG.BREVO_API_KEY && ENV_CONFIG.BREVO_SENDER_EMAIL);
+    return Boolean(
+      ENV_CONFIG.EMAILJS_SERVICE_ID &&
+        ENV_CONFIG.EMAILJS_PUBLIC_KEY &&
+        ENV_CONFIG.EMAILJS_PRIVATE_KEY
+    );
   }
 
-  static async send(input: SendEmailInput): Promise<boolean> {
+  static async sendTemplate(input: SendTemplateEmailInput): Promise<boolean> {
     if (!EmailService.isConfigured()) {
-      logger.warn('Brevo email skipped — API key or sender email not configured', {
+      logger.warn('EmailJS skipped — service/public/private key not configured', {
         to: input.to.email,
-        subject: input.subject,
+        templateId: input.templateId,
       });
       return false;
     }
 
+    if (!input.templateId) {
+      logger.warn('EmailJS skipped — template id missing', { to: input.to.email });
+      return false;
+    }
+
     try {
-      await axios.post(
-        'https://api.brevo.com/v3/smtp/email',
+      const response = await axios.post(
+        'https://api.emailjs.com/api/v1.0/email/send',
         {
-          sender: {
-            name: ENV_CONFIG.BREVO_SENDER_NAME,
-            email: ENV_CONFIG.BREVO_SENDER_EMAIL,
+          service_id: ENV_CONFIG.EMAILJS_SERVICE_ID,
+          template_id: input.templateId,
+          user_id: ENV_CONFIG.EMAILJS_PUBLIC_KEY,
+          accessToken: ENV_CONFIG.EMAILJS_PRIVATE_KEY,
+          template_params: {
+            ...input.params,
+            to_email: input.to.email,
+            to_name: input.to.name ?? input.to.email,
           },
-          to: [{ email: input.to.email, name: input.to.name ?? input.to.email }],
-          subject: input.subject,
-          htmlContent: input.html,
-          textContent: input.text,
         },
         {
-          headers: {
-            'api-key': ENV_CONFIG.BREVO_API_KEY,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           timeout: 15000,
+          validateStatus: () => true,
         }
       );
-      logger.info('Email sent via Brevo', { to: input.to.email, subject: input.subject });
-      return true;
+
+      if (response.status >= 200 && response.status < 300) {
+        logger.info('Email sent via EmailJS', {
+          to: input.to.email,
+          templateId: input.templateId,
+        });
+        return true;
+      }
+
+      logger.error('EmailJS send failed', {
+        to: input.to.email,
+        templateId: input.templateId,
+        status: response.status,
+        error: typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
+      });
+      return false;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('Brevo email failed', { to: input.to.email, subject: input.subject, error: message });
+      logger.error('EmailJS request failed', {
+        to: input.to.email,
+        templateId: input.templateId,
+        error: message,
+      });
       return false;
     }
   }

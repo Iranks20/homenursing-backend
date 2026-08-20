@@ -5,6 +5,8 @@ import { CustomError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
 import HiringEmailService from './hiringEmail.service';
 import { FileUploadService } from './fileUpload.service';
+import EmailService from './email.service';
+import { ENV_CONFIG } from '../config/environment';
 
 export interface QualificationDocumentRecord {
   id: string;
@@ -25,10 +27,9 @@ export interface PublicApplicationInput {
 }
 
 export interface PublicApplicationResult {
-  username: string;
-  temporaryPassword: string;
   applicationId: string;
   userId: string;
+  email: string;
 }
 
 export interface BookInterviewInput {
@@ -215,24 +216,46 @@ export class ApplicationService {
       });
     }
 
-    logger.info('Public nurse application submitted', {
-      applicationId: result.application.id,
-      userId: result.user.id,
-      email,
-    });
+    if (!EmailService.isConfigured()) {
+      throw new CustomError(
+        'Nurse registration email is not configured. Please contact support.',
+        503
+      );
+    }
 
-    void HiringEmailService.sendApplicationWelcome({
+    if (!ENV_CONFIG.EMAILJS_TEMPLATE_NURSE_WELCOME) {
+      throw new CustomError(
+        'Nurse welcome email template is not configured. Please contact support.',
+        503
+      );
+    }
+
+    const emailSent = await HiringEmailService.sendApplicationWelcome({
       name: input.name.trim(),
       email,
       username,
       temporaryPassword,
     });
 
-    return {
-      username,
-      temporaryPassword,
+    if (!emailSent) {
+      await prisma.nurseApplication.delete({ where: { id: result.application.id } }).catch(() => undefined);
+      await prisma.user.delete({ where: { id: result.user.id } }).catch(() => undefined);
+      throw new CustomError(
+        'Your application was received but we could not send your login email. Please try again in a few minutes or contact support.',
+        502
+      );
+    }
+
+    logger.info('Public nurse application submitted', {
       applicationId: result.application.id,
       userId: result.user.id,
+      email,
+    });
+
+    return {
+      applicationId: result.application.id,
+      userId: result.user.id,
+      email,
     };
   }
 

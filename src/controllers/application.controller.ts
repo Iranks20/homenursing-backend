@@ -49,8 +49,11 @@ export class ApplicationController {
 
       res.status(201).json({
         success: true,
-        message: 'Application submitted. Your account has been created.',
-        data: result,
+        message: 'Application submitted. Login details have been sent to your email.',
+        data: {
+          applicationId: result.applicationId,
+          email: result.email,
+        },
       });
     } catch (error) {
       next(error);
