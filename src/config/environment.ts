@@ -10,22 +10,6 @@ const requiredEnv = (key: string): string => {
   return value;
 };
 
-export const isPesapalLiveEnv = (value?: string): boolean => {
-  const env = (value ?? process.env.PESAPAL_ENV ?? 'sandbox').toLowerCase();
-  return env === 'production' || env === 'live';
-};
-
-const defaultApiPublicUrl = (): string => {
-  if (process.env.API_PUBLIC_URL?.trim()) {
-    return process.env.API_PUBLIC_URL.trim().replace(/\/$/, '');
-  }
-  const port = process.env.PORT || '3847';
-  return `http://localhost:${port}`;
-};
-
-const apiPublicUrl = defaultApiPublicUrl();
-const pesapalLive = isPesapalLiveEnv(process.env.PESAPAL_ENV);
-
 const parseCorsOrigins = (value?: string): string[] => {
   if (!value) {
     return [
@@ -68,20 +52,18 @@ export const ENV_CONFIG = {
   RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
   ENABLE_RATE_LIMIT: process.env.ENABLE_RATE_LIMIT === 'true',
 
-  // Email Configuration (EmailJS) — https://dashboard.emailjs.com
+  // Email Configuration (Brevo)
+  BREVO_API_KEY: process.env.BREVO_API_KEY || '',
+  BREVO_SENDER_EMAIL: process.env.BREVO_SENDER_EMAIL || '',
+  BREVO_SENDER_NAME: process.env.BREVO_SENDER_NAME || 'Teamwork Homecare',
+
+  // EmailJS Configuration (nurse welcome email template check)
   EMAILJS_SERVICE_ID: process.env.EMAILJS_SERVICE_ID || '',
   EMAILJS_PUBLIC_KEY: process.env.EMAILJS_PUBLIC_KEY || '',
   EMAILJS_PRIVATE_KEY: process.env.EMAILJS_PRIVATE_KEY || '',
   EMAILJS_TEMPLATE_NURSE_WELCOME: process.env.EMAILJS_TEMPLATE_NURSE_WELCOME || '',
-  EMAILJS_TEMPLATE_EXAM_PASSED: process.env.EMAILJS_TEMPLATE_EXAM_PASSED || '',
-  EMAILJS_TEMPLATE_EXAM_FAILED: process.env.EMAILJS_TEMPLATE_EXAM_FAILED || '',
-  EMAILJS_TEMPLATE_INTERVIEW_BOOKED: process.env.EMAILJS_TEMPLATE_INTERVIEW_BOOKED || '',
-  EMAILJS_TEMPLATE_INTERVIEW_FAILED: process.env.EMAILJS_TEMPLATE_INTERVIEW_FAILED || '',
-  EMAILJS_TEMPLATE_INTERVIEW_PASSED: process.env.EMAILJS_TEMPLATE_INTERVIEW_PASSED || '',
-  EMAILJS_TEMPLATE_CERTIFIED: process.env.EMAILJS_TEMPLATE_CERTIFIED || '',
-  EMAILJS_TEMPLATE_RECRUITED: process.env.EMAILJS_TEMPLATE_RECRUITED || '',
   APP_URL: (process.env.APP_URL || 'http://localhost:5291').replace(/\/$/, ''),
-  API_PUBLIC_URL: apiPublicUrl,
+  API_PUBLIC_URL: (process.env.API_PUBLIC_URL || process.env.APP_URL || 'http://localhost:3847').replace(/\/$/, ''),
 
   PESAPAL_CONSUMER_KEY: process.env.PESAPAL_CONSUMER_KEY || '',
   PESAPAL_CONSUMER_SECRET: process.env.PESAPAL_CONSUMER_SECRET || '',
@@ -90,16 +72,21 @@ export const ENV_CONFIG = {
   PESAPAL_COUNTRY_CODE: process.env.PESAPAL_COUNTRY_CODE || 'UG',
   PESAPAL_API_BASE_URL:
     process.env.PESAPAL_API_BASE_URL ||
-    (pesapalLive ? 'https://pay.pesapal.com/v3/api' : 'https://cybqa.pesapal.com/pesapalv3/api'),
+    (process.env.PESAPAL_ENV === 'production'
+      ? 'https://pay.pesapal.com/v3/api'
+      : 'https://cybqa.pesapal.com/pesapalv3/api'),
   PESAPAL_CALLBACK_URL:
-    process.env.PESAPAL_CALLBACK_URL || `${apiPublicUrl}/api/v1/payments/pesapal/callback`,
-  PESAPAL_IPN_URL: process.env.PESAPAL_IPN_URL || `${apiPublicUrl}/api/v1/payments/pesapal/ipn`,
+    process.env.PESAPAL_CALLBACK_URL ||
+    `${(process.env.API_PUBLIC_URL || process.env.APP_URL || 'http://localhost:3847').replace(/\/$/, '')}/api/v1/payments/pesapal/callback`,
+  PESAPAL_IPN_URL:
+    process.env.PESAPAL_IPN_URL ||
+    `${(process.env.API_PUBLIC_URL || process.env.APP_URL || 'http://localhost:3847').replace(/\/$/, '')}/api/v1/payments/pesapal/ipn`,
 
   CERTIFICATE_FEE_AMOUNT: parseFloat(process.env.CERTIFICATE_FEE_AMOUNT || '150000'),
   CERTIFICATE_FEE_CURRENCY: process.env.CERTIFICATE_FEE_CURRENCY || 'UGX',
   CERTIFICATE_FEE_DESCRIPTION: process.env.CERTIFICATE_FEE_DESCRIPTION || 'Nursing qualification certificate fee',
   CERTIFICATE_SIGNATORY_NAME: process.env.CERTIFICATE_SIGNATORY_NAME || 'Training Director',
-  CERTIFICATE_SIGNATORY_TITLE: process.env.CERTIFICATE_SIGNATORY_TITLE || 'Teamwork Home Nursing',
+  CERTIFICATE_SIGNATORY_TITLE: process.env.CERTIFICATE_SIGNATORY_TITLE || 'Teamwork Homecare',
 
   // SMS Configuration
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || '',

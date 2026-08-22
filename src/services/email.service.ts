@@ -7,6 +7,13 @@ export interface EmailRecipient {
   name?: string;
 }
 
+export interface SendEmailInput {
+  to: EmailRecipient;
+  subject: string;
+  html: string;
+  text?: string;
+}
+
 export interface SendTemplateEmailInput {
   to: EmailRecipient;
   templateId: string;
@@ -14,6 +21,7 @@ export interface SendTemplateEmailInput {
 }
 
 export class EmailService {
+  /** Whether EmailJS (the templated-email provider) has its keys configured. */
   static isConfigured(): boolean {
     return Boolean(
       ENV_CONFIG.EMAILJS_SERVICE_ID &&
@@ -22,6 +30,64 @@ export class EmailService {
     );
   }
 
+  /** Whether Brevo (the raw-HTML email provider) has its keys configured. */
+  static isBrevoConfigured(): boolean {
+    return Boolean(ENV_CONFIG.BREVO_API_KEY && ENV_CONFIG.BREVO_SENDER_EMAIL);
+  }
+
+  /**
+   * Send a fully custom HTML email via Brevo. Used by HiringEmailService for the
+   * recruitment-pipeline emails (application received, exam result, interview
+   * outcome, certified, recruited, etc.) which build their own HTML body per
+   * message rather than relying on a pre-made template.
+   *
+   * Requires BREVO_API_KEY and BREVO_SENDER_EMAIL to be set in .env — until then
+   * this logs a warning and returns false rather than sending (same as before).
+   */
+  static async send(input: SendEmailInput): Promise<boolean> {
+    if (!EmailService.isBrevoConfigured()) {
+      logger.warn('Brevo email skipped — API key or sender email not configured', {
+        to: input.to.email,
+        subject: input.subject,
+      });
+      return false;
+    }
+
+    try {
+      await axios.post(
+        'https://api.brevo.com/v3/smtp/email',
+        {
+          sender: {
+            name: ENV_CONFIG.BREVO_SENDER_NAME,
+            email: ENV_CONFIG.BREVO_SENDER_EMAIL,
+          },
+          to: [{ email: input.to.email, name: input.to.name ?? input.to.email }],
+          subject: input.subject,
+          htmlContent: input.html,
+          textContent: input.text,
+        },
+        {
+          headers: {
+            'api-key': ENV_CONFIG.BREVO_API_KEY,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          timeout: 15000,
+        }
+      );
+      logger.info('Email sent via Brevo', { to: input.to.email, subject: input.subject });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Brevo email failed', { to: input.to.email, subject: input.subject, error: message });
+      return false;
+    }
+  }
+
+  /**
+   * Send a pre-made EmailJS template. Used where a specific EMAILJS_TEMPLATE_*
+   * id has been configured in .env (currently just the nurse welcome email).
+   */
   static async sendTemplate(input: SendTemplateEmailInput): Promise<boolean> {
     if (!EmailService.isConfigured()) {
       logger.warn('EmailJS skipped — service/public/private key not configured', {

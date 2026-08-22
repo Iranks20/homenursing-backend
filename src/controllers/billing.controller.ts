@@ -158,6 +158,9 @@ const parsePaymentPayload = (body: unknown): CreatePaymentData => {
   if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
     throw new CustomError('amount is required', 400);
   }
+  if (Number(amount) <= 0) {
+    throw new CustomError('amount must be greater than zero', 400);
+  }
   if (!method || method.trim() === '') {
     throw new CustomError('method is required', 400);
   }

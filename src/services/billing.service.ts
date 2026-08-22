@@ -141,34 +141,24 @@ const toDate = (value: Date | string, field: string): Date => {
 
 const PAD_LEN = 6;
 
-const invoiceDetailInclude = {
-  patient: { select: { id: true, name: true, email: true } },
-  lineItems: {
-    orderBy: { sortOrder: 'asc' as const },
-    include: {
-      service: { select: { id: true, name: true } },
-      consultationProvider: {
-        select: {
-          id: true,
-          name: true,
-          role: true,
-          specialistSpecialization: true,
-          therapistSpecialization: true,
-        },
-      },
-      consultationSpecialist: { select: { id: true, name: true, specialization: true } },
-      consultationTherapist: { select: { id: true, name: true, specialization: true } },
-    },
-  },
-  payments: {
-    orderBy: { date: 'desc' as const },
-    take: 1,
-    select: { method: true },
+// Full payment ledger — every invoice keeps a handful of payments at most (clinic scale),
+// so it's cheap to always return the whole history rather than a truncated "latest" view.
+// This is what lets the UI show installment-by-installment payment tracking.
+const invoicePaymentsInclude = {
+  orderBy: { date: 'asc' as const },
+  select: {
+    id: true,
+    amount: true,
+    method: true,
+    status: true,
+    transactionId: true,
+    date: true,
+    description: true,
   },
 } as const;
 
-const invoiceListInclude = {
-  patient: { select: { id: true, name: true, email: true } },
+const invoiceDetailInclude = {
+  patient: { select: { id: true, name: true, email: true, phone: true } },
   lineItems: {
     orderBy: { sortOrder: 'asc' as const },
     include: {
@@ -186,11 +176,29 @@ const invoiceListInclude = {
       consultationTherapist: { select: { id: true, name: true, specialization: true } },
     },
   },
-  payments: {
-    orderBy: { date: 'desc' as const },
-    take: 1,
-    select: { method: true },
+  payments: invoicePaymentsInclude,
+} as const;
+
+const invoiceListInclude = {
+  patient: { select: { id: true, name: true, email: true, phone: true } },
+  lineItems: {
+    orderBy: { sortOrder: 'asc' as const },
+    include: {
+      service: { select: { id: true, name: true } },
+      consultationProvider: {
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          specialistSpecialization: true,
+          therapistSpecialization: true,
+        },
+      },
+      consultationSpecialist: { select: { id: true, name: true, specialization: true } },
+      consultationTherapist: { select: { id: true, name: true, specialization: true } },
+    },
   },
+  payments: invoicePaymentsInclude,
 } as const;
 
 type InvoiceWithListRelations = Prisma.InvoiceGetPayload<{ include: typeof invoiceListInclude }>;
@@ -219,14 +227,44 @@ function summarizeLineServiceNames(items: InvoiceWithListRelations['lineItems'])
   return `${unique.slice(0, 2).join(', ')} +${unique.length - 2} more`;
 }
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** 'unpaid' | 'partial' | 'paid' — derived from actual completed payments, independent of the
+ * stored InvoiceStatus (which stays PENDING/OVERDUE/PAID). This is what lets the UI show
+ * "partially paid" for an installment plan without needing a schema/enum migration. */
+function derivePaymentStatus(invoiceAmount: number, amountPaid: number, storedPaid: boolean): 'unpaid' | 'partial' | 'paid' {
+  if (storedPaid) return 'paid';
+  if (amountPaid <= 0) return 'unpaid';
+  if (amountPaid >= invoiceAmount) return 'paid';
+  return 'partial';
+}
+
 function toInvoiceApiShape(invoice: InvoiceWithListRelations | InvoiceWithDetailRelations) {
   const items = invoice.lineItems ?? [];
-  const latestPaymentMethod = invoice.payments?.[0]?.method;
+  const payments = invoice.payments ?? [];
+  const completedPayments = payments.filter((p) => p.status === PaymentStatus.COMPLETED);
+  const amountPaid = round2(completedPayments.reduce((sum, p) => sum + p.amount, 0));
+  const balanceDue = round2(Math.max(0, invoice.amount - amountPaid));
+  const latestPaymentMethod = completedPayments[completedPayments.length - 1]?.method;
+  const paymentStatus = derivePaymentStatus(invoice.amount, amountPaid, invoice.status === InvoiceStatus.PAID);
   return {
     ...invoice,
     patientName: invoice.patient?.name,
+    patientPhone: (invoice.patient as { phone?: string } | null)?.phone,
     serviceName: summarizeLineServiceNames(items),
     paymentMethod: latestPaymentMethod != null ? String(latestPaymentMethod) : undefined,
+    amountPaid,
+    balanceDue,
+    paymentStatus,
+    payments: [...payments].reverse().map((p) => ({
+      id: p.id,
+      amount: p.amount,
+      method: p.method,
+      status: p.status,
+      transactionId: p.transactionId,
+      date: p.date,
+      description: p.description,
+    })),
     lineItems: items.map((li) => ({
       id: li.id,
       serviceId: li.serviceId,
@@ -1100,11 +1138,33 @@ export class BillingService {
     if (!invoice) {
       throw new CustomError('Invoice not found', 404);
     }
+    if (invoice.status === InvoiceStatus.PAID) {
+      throw new CustomError('This invoice is already fully paid', 400);
+    }
+    if (!(data.amount > 0)) {
+      throw new CustomError('Payment amount must be greater than zero', 400);
+    }
+
+    const status = data.status ?? PaymentStatus.COMPLETED;
+    if (status === PaymentStatus.COMPLETED) {
+      const priorPaid = await prisma.payment.aggregate({
+        where: { invoiceId: invoice.id, status: PaymentStatus.COMPLETED },
+        _sum: { amount: true },
+      });
+      const remaining = round2(invoice.amount - (priorPaid._sum.amount ?? 0));
+      // Small epsilon for floating point rounding; installment payments should sum to the total, not exceed it.
+      if (data.amount > remaining + 0.01) {
+        throw new CustomError(
+          `Payment of ${data.amount} exceeds the remaining balance of ${remaining}`,
+          400
+        );
+      }
+    }
 
     const payment = await this.createPayment(data);
 
     const totalPaid = await prisma.payment.aggregate({
-      where: { invoiceId: invoice.id },
+      where: { invoiceId: invoice.id, status: PaymentStatus.COMPLETED },
       _sum: { amount: true },
     });
 
@@ -1115,7 +1175,7 @@ export class BillingService {
       });
     }
 
-    logger.info('Payment processed', { paymentId: payment.id });
+    logger.info('Payment processed', { paymentId: payment.id, invoiceId: invoice.id, amount: data.amount });
     return payment;
   }
 }

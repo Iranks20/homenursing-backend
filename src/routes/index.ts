@@ -18,6 +18,7 @@ import labRoutes from './lab.routes';
 import referralRoutes from './referral.routes';
 import staffPaymentRoutes from './staffPayment.routes';
 import certificatePaymentRoutes from './certificatePayment.routes';
+import billingRoutes from './billing.routes';
 
 const router = Router();
 
@@ -75,7 +76,7 @@ router.get('/v1/status', (req, res) => {
 router.get('/v1', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Teamwork Home Nursing API',
+    message: 'Teamwork Homecare API',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     endpoints: {
@@ -117,5 +118,6 @@ router.use('/v1/lab', labRoutes);
 router.use('/v1/referrals', referralRoutes);
 router.use('/v1/staff-payments', staffPaymentRoutes);
 router.use('/v1/payments', certificatePaymentRoutes);
+router.use('/v1/billing', billingRoutes);
 
 export default router;

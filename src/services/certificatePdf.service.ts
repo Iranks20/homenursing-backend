@@ -55,7 +55,7 @@ export class CertificatePdfService {
       page.drawText(text, { x: centerX - width / 2, y, size, font, color });
     };
 
-    drawCentered('TEAMWORK HOME NURSING', 500, 22, fontBold, navy);
+    drawCentered('TEAMWORK HOMECARE', 500, 22, fontBold, navy);
     drawCentered('Certificate of Qualification', 465, 16, fontBold, navy);
     drawCentered('This certifies that', 410, 12, fontRegular, gray);
     drawCentered(input.candidateName.toUpperCase(), 375, 28, fontBold, navy);
