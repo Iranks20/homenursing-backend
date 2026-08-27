@@ -80,8 +80,24 @@ const parseLineInputs = (rawLines: unknown, label: string): InvoiceLineInput[] =
     if (line.procedureCode !== undefined) {
       entry.procedureCode = line.procedureCode === null ? null : String(line.procedureCode);
     }
+    if (line.quantityUnit !== undefined && line.quantityUnit !== null && line.quantityUnit !== '') {
+      entry.quantityUnit = String(line.quantityUnit);
+    }
+    if (line.serviceDateFrom !== undefined && line.serviceDateFrom !== null && line.serviceDateFrom !== '') {
+      entry.serviceDateFrom = String(line.serviceDateFrom);
+    }
+    if (line.serviceDateTo !== undefined && line.serviceDateTo !== null && line.serviceDateTo !== '') {
+      entry.serviceDateTo = String(line.serviceDateTo);
+    }
     return entry;
   });
+};
+
+const parseOptionalDocumentNumber = (value: unknown): string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const trimmed = String(value).trim();
+  return trimmed === '' ? null : trimmed;
 };
 
 const parseInvoicePayload = (body: unknown): CreateInvoiceData => {
@@ -101,6 +117,11 @@ const parseInvoicePayload = (body: unknown): CreateInvoiceData => {
 
   const status = parseEnum(InvoiceStatus, data.status, 'status', false);
   if (status !== undefined) payload.status = status;
+
+  const displayInvoiceNumber = parseOptionalDocumentNumber(data.displayInvoiceNumber);
+  if (displayInvoiceNumber !== undefined) payload.displayInvoiceNumber = displayInvoiceNumber;
+  const displayReceiptNumber = parseOptionalDocumentNumber(data.displayReceiptNumber);
+  if (displayReceiptNumber !== undefined) payload.displayReceiptNumber = displayReceiptNumber;
 
   if (Array.isArray(data.lines) && data.lines.length > 0) {
     payload.lines = parseLineInputs(data.lines, 'lines');
@@ -131,6 +152,11 @@ const parseInvoiceUpdatePayload = (body: unknown): UpdateInvoiceData => {
 
   const status = parseEnum(InvoiceStatus, data.status, 'status', false);
   if (status !== undefined) payload.status = status;
+
+  const displayInvoiceNumber = parseOptionalDocumentNumber(data.displayInvoiceNumber);
+  if (displayInvoiceNumber !== undefined) payload.displayInvoiceNumber = displayInvoiceNumber;
+  const displayReceiptNumber = parseOptionalDocumentNumber(data.displayReceiptNumber);
+  if (displayReceiptNumber !== undefined) payload.displayReceiptNumber = displayReceiptNumber;
 
   if (data.lines !== undefined) {
     if (!Array.isArray(data.lines)) {

@@ -591,9 +591,11 @@ model Referral {
 }
 
 model Invoice {
-  id            String            @id @default(cuid())
-  invoiceNumber String            @unique
-  patientId     String
+  id                    String            @id @default(cuid())
+  invoiceNumber         String            @unique
+  displayInvoiceNumber  String?
+  displayReceiptNumber  String?
+  patientId             String
   serviceId     String?
   amount        Float
   date          DateTime
@@ -620,6 +622,9 @@ model InvoiceLineItem {
   procedureCode            String?
   description              String
   quantity                 Int         @default(1)
+  quantityUnit             String?
+  serviceDateFrom          DateTime?
+  serviceDateTo            DateTime?
   unitPrice                Float
   lineAmount               Float
   sortOrder                Int         @default(0)

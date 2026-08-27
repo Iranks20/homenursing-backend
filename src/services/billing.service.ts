@@ -18,6 +18,9 @@ export interface InvoiceLineInput {
   consultationSpecialistId?: string;
   consultationTherapistId?: string;
   quantity?: number;
+  quantityUnit?: string;
+  serviceDateFrom?: Date | string;
+  serviceDateTo?: Date | string;
   unitPrice?: number;
   description?: string;
   procedureCode?: string | null;
@@ -112,6 +115,8 @@ export interface CreateInvoiceData {
   dueDate: Date;
   description: string;
   status?: InvoiceStatus;
+  displayInvoiceNumber?: string | null;
+  displayReceiptNumber?: string | null;
   lines?: InvoiceLineInput[];
   serviceId?: string;
   amount?: number;
@@ -229,6 +234,35 @@ function summarizeLineServiceNames(items: InvoiceWithListRelations['lineItems'])
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+const SERVICE_QUANTITY_UNITS = new Set(['day', 'week', 'month']);
+
+function normalizeServiceQuantityUnit(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const unit = value.trim().toLowerCase();
+  return SERVICE_QUANTITY_UNITS.has(unit) ? unit : null;
+}
+
+function parseOptionalLineDate(value: unknown, field: string): Date | null {
+  if (value === undefined || value === null || value === '') return null;
+  const date = value instanceof Date ? value : new Date(value as string);
+  if (Number.isNaN(date.getTime())) {
+    throw new CustomError(`${field} is invalid`, 400);
+  }
+  return date;
+}
+
+function parseServiceLineDates(line: InvoiceLineInput): {
+  serviceDateFrom: Date | null;
+  serviceDateTo: Date | null;
+} {
+  const serviceDateFrom = parseOptionalLineDate(line.serviceDateFrom, 'serviceDateFrom');
+  const serviceDateTo = parseOptionalLineDate(line.serviceDateTo, 'serviceDateTo');
+  if (serviceDateFrom && serviceDateTo && serviceDateFrom.getTime() > serviceDateTo.getTime()) {
+    throw new CustomError('Service end date must be on or after the start date', 400);
+  }
+  return { serviceDateFrom, serviceDateTo };
+}
+
 /** 'unpaid' | 'partial' | 'paid' — derived from actual completed payments, independent of the
  * stored InvoiceStatus (which stays PENDING/OVERDUE/PAID). This is what lets the UI show
  * "partially paid" for an installment plan without needing a schema/enum migration. */
@@ -278,6 +312,9 @@ function toInvoiceApiShape(invoice: InvoiceWithListRelations | InvoiceWithDetail
       procedureCode: li.procedureCode,
       description: li.description,
       quantity: li.quantity,
+      quantityUnit: li.quantityUnit ?? null,
+      serviceDateFrom: li.serviceDateFrom ?? null,
+      serviceDateTo: li.serviceDateTo ?? null,
       unitPrice: li.unitPrice,
       lineAmount: li.lineAmount,
       sortOrder: li.sortOrder,
@@ -292,10 +329,31 @@ type ResolvedLine = {
   consultationTherapistId: string | null;
   description: string;
   quantity: number;
+  quantityUnit: string | null;
+  serviceDateFrom: Date | null;
+  serviceDateTo: Date | null;
   unitPrice: number;
   lineAmount: number;
   procedureCode: string | null;
 };
+
+function mapResolvedLineToCreate(r: ResolvedLine, sortOrder: number) {
+  return {
+    serviceId: r.serviceId,
+    consultationProviderId: r.consultationProviderId,
+    consultationSpecialistId: r.consultationSpecialistId,
+    consultationTherapistId: r.consultationTherapistId,
+    description: r.description,
+    quantity: r.quantity,
+    quantityUnit: r.quantityUnit,
+    serviceDateFrom: r.serviceDateFrom,
+    serviceDateTo: r.serviceDateTo,
+    unitPrice: r.unitPrice,
+    lineAmount: r.lineAmount,
+    procedureCode: r.procedureCode,
+    sortOrder,
+  };
+}
 
 async function getNextInvoiceNumber(): Promise<string> {
   const count = await prisma.invoice.count();
@@ -414,6 +472,9 @@ export class BillingService {
           description:
             (line.description && line.description.trim()) || buildConsultationDescription(provider),
           quantity: qty,
+          quantityUnit: null,
+          serviceDateFrom: null,
+          serviceDateTo: null,
           unitPrice: unit,
           lineAmount,
           procedureCode: line.procedureCode ?? null,
@@ -451,6 +512,9 @@ export class BillingService {
             (line.description && line.description.trim()) ||
             buildRosterConsultationDescription(spec.name, spec.specialization, 'specialist'),
           quantity: qty,
+          quantityUnit: null,
+          serviceDateFrom: null,
+          serviceDateTo: null,
           unitPrice: unit,
           lineAmount,
           procedureCode: line.procedureCode ?? null,
@@ -488,6 +552,9 @@ export class BillingService {
             (line.description && line.description.trim()) ||
             buildRosterConsultationDescription(th.name, th.specialization, 'therapist'),
           quantity: qty,
+          quantityUnit: null,
+          serviceDateFrom: null,
+          serviceDateTo: null,
           unitPrice: unit,
           lineAmount,
           procedureCode: line.procedureCode ?? null,
@@ -510,13 +577,19 @@ export class BillingService {
           ? Number(line.unitPrice)
           : Number(svc.price) || 0;
       const lineAmount = Math.round(qty * unit * 100) / 100;
+      const { serviceDateFrom, serviceDateTo } = parseServiceLineDates(line);
+      const quantityUnit = normalizeServiceQuantityUnit(line.quantityUnit);
+      const baseDescription = (line.description && line.description.trim()) || svc.name;
       resolved.push({
         serviceId: line.serviceId,
         consultationProviderId: null,
         consultationSpecialistId: null,
         consultationTherapistId: null,
-        description: (line.description && line.description.trim()) || svc.name,
+        description: baseDescription,
         quantity: qty,
+        quantityUnit,
+        serviceDateFrom,
+        serviceDateTo,
         unitPrice: unit,
         lineAmount,
         procedureCode: line.procedureCode ?? null,
@@ -623,6 +696,9 @@ export class BillingService {
           consultationTherapistId: null,
           description: data.description || svc.name,
           quantity: 1,
+          quantityUnit: null,
+          serviceDateFrom: null,
+          serviceDateTo: null,
           unitPrice: amount,
           lineAmount: amount,
           procedureCode: null,
@@ -645,6 +721,8 @@ export class BillingService {
     const invoice = await prisma.invoice.create({
       data: {
         invoiceNumber,
+        displayInvoiceNumber: data.displayInvoiceNumber?.trim() || null,
+        displayReceiptNumber: data.displayReceiptNumber?.trim() || null,
         patientId: data.patientId,
         serviceId: primaryServiceId,
         amount: total,
@@ -653,18 +731,7 @@ export class BillingService {
         description: data.description,
         status: data.status ?? InvoiceStatus.PENDING,
         lineItems: {
-          create: resolved.map((r, i) => ({
-            serviceId: r.serviceId,
-            consultationProviderId: r.consultationProviderId,
-            consultationSpecialistId: r.consultationSpecialistId,
-            consultationTherapistId: r.consultationTherapistId,
-            description: r.description,
-            quantity: r.quantity,
-            unitPrice: r.unitPrice,
-            lineAmount: r.lineAmount,
-            procedureCode: r.procedureCode,
-            sortOrder: i,
-          })),
+          create: resolved.map((r, i) => mapResolvedLineToCreate(r, i)),
         },
       },
       include: invoiceDetailInclude,
@@ -709,7 +776,13 @@ export class BillingService {
     if (statusFilter === 'unpaid') {
       where.status = { in: [InvoiceStatus.PENDING, InvoiceStatus.OVERDUE] };
     } else if (statusFilter === 'paid') {
-      where.status = InvoiceStatus.PAID;
+      where.OR = [
+        { status: InvoiceStatus.PAID },
+        {
+          status: { in: [InvoiceStatus.PENDING, InvoiceStatus.OVERDUE] },
+          payments: { some: { status: PaymentStatus.COMPLETED } },
+        },
+      ];
     }
     // 'all' = no status filter
 
@@ -760,10 +833,21 @@ export class BillingService {
     ]);
 
     const transformedInvoices = invoices.map((invoice) => toInvoiceApiShape(invoice));
+    const filteredInvoices =
+      statusFilter === 'unpaid'
+        ? transformedInvoices.filter((inv) => inv.paymentStatus !== 'paid')
+        : statusFilter === 'paid'
+        ? transformedInvoices.filter((inv) => inv.paymentStatus === 'paid')
+        : transformedInvoices;
 
     return {
-      invoices: transformedInvoices,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+      invoices: filteredInvoices,
+      pagination: {
+        page,
+        limit,
+        total: statusFilter === 'all' ? total : filteredInvoices.length,
+        totalPages: Math.ceil((statusFilter === 'all' ? total : filteredInvoices.length) / limit) || 1,
+      },
     };
   }
 
@@ -776,6 +860,40 @@ export class BillingService {
       include: invoiceDetailInclude,
     });
     return toInvoiceApiShape(updated) as any;
+  }
+
+  private static async ensurePaymentLedgerForPaidInvoice(
+    invoiceId: string,
+    patientId: string,
+    invoiceAmount: number
+  ): Promise<void> {
+    const priorPaid = await prisma.payment.aggregate({
+      where: { invoiceId, status: PaymentStatus.COMPLETED },
+      _sum: { amount: true },
+    });
+    const amountPaid = round2(priorPaid._sum.amount ?? 0);
+    const remaining = round2(Math.max(0, invoiceAmount - amountPaid));
+    if (remaining <= 0) return;
+
+    await this.createPayment({
+      patientId,
+      invoiceId,
+      amount: remaining,
+      method: 'Manual adjustment',
+      description: 'Payment recorded when invoice marked as paid',
+      status: PaymentStatus.COMPLETED,
+    });
+  }
+
+  private static async finalizePaidInvoiceUpdate(invoiceId: string): Promise<Invoice> {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: invoiceDetailInclude,
+    });
+    if (!invoice) {
+      throw new CustomError('Invoice not found', 404);
+    }
+    return toInvoiceApiShape(invoice) as any;
   }
 
   static async updateInvoice(id: string, data: UpdateInvoiceData): Promise<Invoice> {
@@ -806,6 +924,18 @@ export class BillingService {
       if (data.dueDate !== undefined) headerPatch.dueDate = toDate(data.dueDate, 'dueDate');
       if (data.patientId !== undefined) headerPatch.patientId = data.patientId;
       if (data.status !== undefined) headerPatch.status = data.status;
+      if (data.displayInvoiceNumber !== undefined) {
+        headerPatch.displayInvoiceNumber =
+          data.displayInvoiceNumber == null || String(data.displayInvoiceNumber).trim() === ''
+            ? null
+            : String(data.displayInvoiceNumber).trim();
+      }
+      if (data.displayReceiptNumber !== undefined) {
+        headerPatch.displayReceiptNumber =
+          data.displayReceiptNumber == null || String(data.displayReceiptNumber).trim() === ''
+            ? null
+            : String(data.displayReceiptNumber).trim();
+      }
 
       const invoice = await prisma.$transaction(async (tx) => {
         await tx.invoiceLineItem.deleteMany({ where: { invoiceId: id } });
@@ -814,23 +944,17 @@ export class BillingService {
           data: {
             ...headerPatch,
             lineItems: {
-              create: resolved.map((r, i) => ({
-                serviceId: r.serviceId,
-                consultationProviderId: r.consultationProviderId,
-                consultationSpecialistId: r.consultationSpecialistId,
-                consultationTherapistId: r.consultationTherapistId,
-                description: r.description,
-                quantity: r.quantity,
-                unitPrice: r.unitPrice,
-                lineAmount: r.lineAmount,
-                procedureCode: r.procedureCode,
-                sortOrder: i,
-              })),
+              create: resolved.map((r, i) => mapResolvedLineToCreate(r, i)),
             },
           },
           include: invoiceDetailInclude,
         });
       });
+
+      if (data.status === InvoiceStatus.PAID) {
+        await this.ensurePaymentLedgerForPaidInvoice(invoice.id, invoice.patientId, invoice.amount);
+        return this.finalizePaidInvoiceUpdate(invoice.id);
+      }
 
       return toInvoiceApiShape(invoice) as any;
     }
@@ -841,12 +965,29 @@ export class BillingService {
     if (data.date !== undefined) updates.date = toDate(data.date, 'date');
     if (data.dueDate !== undefined) updates.dueDate = toDate(data.dueDate, 'dueDate');
     if (data.patientId !== undefined) updates.patientId = data.patientId;
+    if (data.displayInvoiceNumber !== undefined) {
+      updates.displayInvoiceNumber =
+        data.displayInvoiceNumber == null || String(data.displayInvoiceNumber).trim() === ''
+          ? null
+          : String(data.displayInvoiceNumber).trim();
+    }
+    if (data.displayReceiptNumber !== undefined) {
+      updates.displayReceiptNumber =
+        data.displayReceiptNumber == null || String(data.displayReceiptNumber).trim() === ''
+          ? null
+          : String(data.displayReceiptNumber).trim();
+    }
 
     const invoice = await prisma.invoice.update({
       where: { id },
       data: updates,
       include: invoiceDetailInclude,
     });
+
+    if (data.status === InvoiceStatus.PAID) {
+      await this.ensurePaymentLedgerForPaidInvoice(invoice.id, invoice.patientId, invoice.amount);
+      return this.finalizePaidInvoiceUpdate(invoice.id);
+    }
 
     return toInvoiceApiShape(invoice) as any;
   }
