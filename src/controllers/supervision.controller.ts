@@ -6,6 +6,7 @@ import {
   createReportSchema,
   listAssignmentsSchema,
   listReportsSchema,
+  updateAssignmentSchema,
 } from '../validators/supervision.validator';
 import { validateBody, validateQuery } from '../validators/user.validator';
 
@@ -62,6 +63,56 @@ export class SupervisionController {
       }
       const assignment = await SupervisionService.endAssignment(req.user!.userId, assignmentId);
       res.status(200).json({ success: true, message: 'Assignment ended', data: assignment });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const assignmentId = req.params.id;
+      if (!assignmentId) {
+        res.status(400).json({ success: false, message: 'Assignment ID is required' });
+        return;
+      }
+
+      const data = validateBody<{
+        nurseId?: string;
+        location?: string | null;
+        notes?: string | null;
+        assignedAt?: string;
+        coverageType?: NurseCoverageType;
+        periodStart?: string | null;
+        periodEnd?: string | null;
+        scheduleNotes?: string | null;
+      }>(updateAssignmentSchema, req.body);
+
+      const payload: {
+        nurseId?: string;
+        location?: string | null;
+        notes?: string | null;
+        assignedAt?: string;
+        coverageType?: NurseCoverageType;
+        periodStart?: string | null;
+        periodEnd?: string | null;
+        scheduleNotes?: string | null;
+      } = {};
+
+      if (data.nurseId !== undefined) payload.nurseId = data.nurseId;
+      if (data.location !== undefined) payload.location = data.location;
+      if (data.notes !== undefined) payload.notes = data.notes;
+      if (data.assignedAt !== undefined) payload.assignedAt = data.assignedAt;
+      if (data.coverageType !== undefined) payload.coverageType = data.coverageType;
+      if (data.periodStart !== undefined) payload.periodStart = data.periodStart;
+      if (data.periodEnd !== undefined) payload.periodEnd = data.periodEnd;
+      if (data.scheduleNotes !== undefined) payload.scheduleNotes = data.scheduleNotes;
+
+      const assignment = await SupervisionService.updateAssignment(
+        req.user!.userId,
+        assignmentId,
+        payload
+      );
+      res.status(200).json({ success: true, message: 'Assignment updated', data: assignment });
     } catch (error) {
       next(error);
     }

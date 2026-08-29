@@ -16,6 +16,19 @@ export const assignNurseSchema = Joi.object({
   scheduleNotes: Joi.string().max(1000).optional().allow('', null),
 });
 
+export const updateAssignmentSchema = Joi.object({
+  nurseId: Joi.string().optional(),
+  location: Joi.string().max(500).optional().allow('', null),
+  notes: Joi.string().max(2000).optional().allow('', null),
+  assignedAt: Joi.date().iso().optional(),
+  coverageType: Joi.string()
+    .valid(...coverageTypes)
+    .optional(),
+  periodStart: Joi.date().iso().optional().allow(null),
+  periodEnd: Joi.date().iso().optional().allow(null),
+  scheduleNotes: Joi.string().max(1000).optional().allow('', null),
+}).min(1);
+
 export const createReportSchema = Joi.object({
   nurseId: Joi.string().required(),
   patientId: Joi.string().optional().allow('', null),

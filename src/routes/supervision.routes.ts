@@ -12,6 +12,7 @@ const supervisorStaff = requireRole(['ADMIN', 'SUPERVISOR']);
 
 router.get('/assignments', supervisorStaff, SupervisionController.listAssignments);
 router.post('/assignments', supervisorStaff, SupervisionController.assignNurse);
+router.put('/assignments/:id', supervisorStaff, SupervisionController.updateAssignment);
 router.patch('/assignments/:id/end', supervisorStaff, SupervisionController.endAssignment);
 router.get('/reports', supervisorStaff, SupervisionController.listReports);
 router.post('/reports', supervisorStaff, SupervisionController.createReport);
