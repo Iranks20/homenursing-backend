@@ -1,11 +1,19 @@
 import Joi from 'joi';
 
+const coverageTypes = ['SIMULTANEOUS', 'DAY_SHIFT', 'NIGHT_SHIFT', 'WEEKLY_ROTATION', 'CUSTOM'];
+
 export const assignNurseSchema = Joi.object({
   patientId: Joi.string().required(),
   nurseId: Joi.string().required(),
   location: Joi.string().max(500).optional().allow('', null),
   notes: Joi.string().max(2000).optional().allow('', null),
   assignedAt: Joi.date().iso().optional(),
+  coverageType: Joi.string()
+    .valid(...coverageTypes)
+    .optional(),
+  periodStart: Joi.date().iso().optional().allow(null),
+  periodEnd: Joi.date().iso().optional().allow(null),
+  scheduleNotes: Joi.string().max(1000).optional().allow('', null),
 });
 
 export const createReportSchema = Joi.object({

@@ -136,23 +136,28 @@ model Patient {
 }
 
 model NursePatientAssignment {
-  id           String           @id @default(cuid())
-  patientId    String
-  nurseId      String
-  assignedById String
-  assignedAt   DateTime         @default(now())
-  location     String?
-  notes        String?
-  status       AssignmentStatus @default(ACTIVE)
-  endedAt      DateTime?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  patient      Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  nurse        User             @relation("NurseAssignments", fields: [nurseId], references: [id])
-  assignedBy   User             @relation("SupervisorAssignments", fields: [assignedById], references: [id])
+  id             String              @id @default(cuid())
+  patientId      String
+  nurseId        String
+  assignedById   String
+  assignedAt     DateTime            @default(now())
+  location       String?
+  notes          String?
+  coverageType   NurseCoverageType   @default(SIMULTANEOUS)
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  scheduleNotes  String?
+  status         AssignmentStatus    @default(ACTIVE)
+  endedAt        DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  patient        Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  nurse          User                @relation("NurseAssignments", fields: [nurseId], references: [id])
+  assignedBy     User                @relation("SupervisorAssignments", fields: [assignedById], references: [id])
 
   @@index([patientId, status])
   @@index([nurseId, status])
+  @@index([patientId, nurseId, status])
   @@map("nurse_patient_assignments")
 }
 
@@ -178,6 +183,14 @@ model NurseSupervisionReport {
 enum AssignmentStatus {
   ACTIVE
   ENDED
+}
+
+enum NurseCoverageType {
+  SIMULTANEOUS
+  DAY_SHIFT
+  NIGHT_SHIFT
+  WEEKLY_ROTATION
+  CUSTOM
 }
 
 model MedicalRecord {

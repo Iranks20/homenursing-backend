@@ -1,4 +1,4 @@
-import { AssignmentStatus, UserRole } from '@prisma/client';
+import { AssignmentStatus, NurseCoverageType, Prisma, UserRole } from '@prisma/client';
 import prisma from '../config/database';
 import { CustomError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
@@ -28,6 +28,35 @@ const reportInclude = {
   supervisor: { select: { id: true, name: true } },
 };
 
+function parseOptionalDate(value: string | undefined, field: string): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new CustomError(`Invalid ${field}`, 400);
+  }
+  return date;
+}
+
+async function syncPatientPrimaryNurse(
+  tx: Prisma.TransactionClient,
+  patientId: string,
+  location?: string | null
+) {
+  const activeAssignments = await tx.nursePatientAssignment.findMany({
+    where: { patientId, status: AssignmentStatus.ACTIVE },
+    orderBy: [{ assignedAt: 'asc' }],
+    select: { nurseId: true },
+  });
+
+  await tx.patient.update({
+    where: { id: patientId },
+    data: {
+      assignedNurseId: activeAssignments[0]?.nurseId ?? null,
+      ...(location ? { location } : {}),
+    },
+  });
+}
+
 function formatAssignment(record: any) {
   return {
     id: record.id,
@@ -37,6 +66,10 @@ function formatAssignment(record: any) {
     assignedAt: record.assignedAt.toISOString(),
     location: record.location ?? undefined,
     notes: record.notes ?? undefined,
+    coverageType: record.coverageType,
+    periodStart: record.periodStart?.toISOString(),
+    periodEnd: record.periodEnd?.toISOString(),
+    scheduleNotes: record.scheduleNotes ?? undefined,
     status: record.status,
     endedAt: record.endedAt?.toISOString(),
     createdAt: record.createdAt.toISOString(),
@@ -77,6 +110,10 @@ export class SupervisionService {
       location?: string;
       notes?: string;
       assignedAt?: string;
+      coverageType?: NurseCoverageType;
+      periodStart?: string;
+      periodEnd?: string;
+      scheduleNotes?: string;
     }
   ) {
     const patient = await prisma.patient.findUnique({ where: { id: input.patientId } });
@@ -89,18 +126,32 @@ export class SupervisionService {
       throw new CustomError('Selected nurse is not valid', 400);
     }
 
+    const existingActive = await prisma.nursePatientAssignment.findFirst({
+      where: {
+        patientId: input.patientId,
+        nurseId: input.nurseId,
+        status: AssignmentStatus.ACTIVE,
+      },
+    });
+    if (existingActive) {
+      throw new CustomError('This nurse is already actively assigned to this patient', 400);
+    }
+
     const location = input.location?.trim() || patient.location || patient.address;
     const assignedAt = input.assignedAt ? new Date(input.assignedAt) : new Date();
     if (Number.isNaN(assignedAt.getTime())) {
       throw new CustomError('Invalid assignment date', 400);
     }
 
-    const assignment = await prisma.$transaction(async (tx) => {
-      await tx.nursePatientAssignment.updateMany({
-        where: { patientId: input.patientId, status: AssignmentStatus.ACTIVE },
-        data: { status: AssignmentStatus.ENDED, endedAt: assignedAt },
-      });
+    const periodStart = parseOptionalDate(input.periodStart, 'period start date');
+    const periodEnd = parseOptionalDate(input.periodEnd, 'period end date');
+    if (periodStart && periodEnd && periodStart.getTime() > periodEnd.getTime()) {
+      throw new CustomError('Coverage end date must be on or after the start date', 400);
+    }
 
+    const coverageType = input.coverageType ?? NurseCoverageType.SIMULTANEOUS;
+
+    const assignment = await prisma.$transaction(async (tx) => {
       const created = await tx.nursePatientAssignment.create({
         data: {
           patientId: input.patientId,
@@ -109,18 +160,16 @@ export class SupervisionService {
           assignedAt,
           location,
           notes: input.notes?.trim() || null,
+          coverageType,
+          periodStart,
+          periodEnd,
+          scheduleNotes: input.scheduleNotes?.trim() || null,
           status: AssignmentStatus.ACTIVE,
         },
         include: assignmentInclude,
       });
 
-      await tx.patient.update({
-        where: { id: input.patientId },
-        data: {
-          assignedNurseId: input.nurseId,
-          location,
-        },
-      });
+      await syncPatientPrimaryNurse(tx, input.patientId, location);
 
       return created;
     });
@@ -130,9 +179,47 @@ export class SupervisionService {
       patientId: input.patientId,
       nurseId: input.nurseId,
       supervisorId,
+      coverageType,
     });
 
     return formatAssignment(assignment);
+  }
+
+  static async endAssignment(supervisorId: string, assignmentId: string) {
+    const assignment = await prisma.nursePatientAssignment.findUnique({
+      where: { id: assignmentId },
+    });
+    if (!assignment) {
+      throw new CustomError('Assignment not found', 404);
+    }
+    if (assignment.status !== AssignmentStatus.ACTIVE) {
+      throw new CustomError('Assignment is already ended', 400);
+    }
+
+    const endedAt = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const record = await tx.nursePatientAssignment.update({
+        where: { id: assignmentId },
+        data: {
+          status: AssignmentStatus.ENDED,
+          endedAt,
+        },
+        include: assignmentInclude,
+      });
+
+      await syncPatientPrimaryNurse(tx, assignment.patientId);
+
+      return record;
+    });
+
+    logger.info('Nurse assignment ended', {
+      assignmentId,
+      patientId: assignment.patientId,
+      nurseId: assignment.nurseId,
+      supervisorId,
+    });
+
+    return formatAssignment(updated);
   }
 
   static async listAssignments(filters: {

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AssignmentStatus } from '@prisma/client';
+import { AssignmentStatus, NurseCoverageType } from '@prisma/client';
 import SupervisionService from '../services/supervision.service';
 import {
   assignNurseSchema,
@@ -18,6 +18,10 @@ export class SupervisionController {
         location?: string | null;
         notes?: string | null;
         assignedAt?: string;
+        coverageType?: NurseCoverageType;
+        periodStart?: string | null;
+        periodEnd?: string | null;
+        scheduleNotes?: string | null;
       }>(assignNurseSchema, req.body);
 
       const payload: {
@@ -26,6 +30,10 @@ export class SupervisionController {
         location?: string;
         notes?: string;
         assignedAt?: string;
+        coverageType?: NurseCoverageType;
+        periodStart?: string;
+        periodEnd?: string;
+        scheduleNotes?: string;
       } = {
         patientId: data.patientId,
         nurseId: data.nurseId,
@@ -33,9 +41,27 @@ export class SupervisionController {
       if (data.location) payload.location = data.location;
       if (data.notes) payload.notes = data.notes;
       if (data.assignedAt) payload.assignedAt = data.assignedAt;
+      if (data.coverageType) payload.coverageType = data.coverageType;
+      if (data.periodStart) payload.periodStart = data.periodStart;
+      if (data.periodEnd) payload.periodEnd = data.periodEnd;
+      if (data.scheduleNotes) payload.scheduleNotes = data.scheduleNotes;
 
       const assignment = await SupervisionService.assignNurse(req.user!.userId, payload);
       res.status(201).json({ success: true, message: 'Nurse assigned to patient', data: assignment });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async endAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const assignmentId = req.params.id;
+      if (!assignmentId) {
+        res.status(400).json({ success: false, message: 'Assignment ID is required' });
+        return;
+      }
+      const assignment = await SupervisionService.endAssignment(req.user!.userId, assignmentId);
+      res.status(200).json({ success: true, message: 'Assignment ended', data: assignment });
     } catch (error) {
       next(error);
     }
