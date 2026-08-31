@@ -993,6 +993,10 @@ export class BillingService {
   }
 
   static async deleteInvoice(id: string): Promise<void> {
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new CustomError('Invoice not found', 404);
+    // Line items and payments are onDelete: Cascade in the schema, so this
+    // also permanently removes every payment/receipt recorded against it.
     await prisma.invoice.delete({ where: { id } });
   }
 
