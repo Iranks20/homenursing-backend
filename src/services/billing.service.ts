@@ -117,6 +117,7 @@ export interface CreateInvoiceData {
   status?: InvoiceStatus;
   displayInvoiceNumber?: string | null;
   displayReceiptNumber?: string | null;
+  paymentDate?: Date | string | null;
   lines?: InvoiceLineInput[];
   serviceId?: string;
   amount?: number;
@@ -134,6 +135,7 @@ export interface CreatePaymentData {
   description: string;
   transactionId?: string;
   status?: PaymentStatus;
+  date?: Date | string;
 }
 
 const toDate = (value: Date | string, field: string): Date => {
@@ -738,6 +740,16 @@ export class BillingService {
     });
 
     logger.info('Invoice created', { invoiceId: invoice.id });
+    if ((data.status ?? InvoiceStatus.PENDING) === InvoiceStatus.PAID) {
+      await this.ensurePaymentLedgerForPaidInvoice(
+        invoice.id,
+        invoice.patientId,
+        invoice.amount,
+        data.paymentDate,
+        invoice.date
+      );
+      return this.finalizePaidInvoiceUpdate(invoice.id);
+    }
     return toInvoiceApiShape(invoice) as any;
   }
 
@@ -862,10 +874,51 @@ export class BillingService {
     return toInvoiceApiShape(updated) as any;
   }
 
+  private static resolvePaymentDate(
+    paymentDate: Date | string | null | undefined,
+    fallbackDate: Date | string
+  ): Date {
+    if (paymentDate != null && paymentDate !== '') {
+      return toDate(paymentDate, 'paymentDate');
+    }
+    return toDate(fallbackDate, 'date');
+  }
+
+  private static async syncInvoicePaymentDate(
+    invoiceId: string,
+    paymentDate: Date | string
+  ): Promise<void> {
+    const payDate = toDate(paymentDate, 'paymentDate');
+    const payments = await prisma.payment.findMany({
+      where: { invoiceId, status: PaymentStatus.COMPLETED },
+      orderBy: { date: 'asc' },
+    });
+    if (payments.length === 0) return;
+    const onlyPayment = payments[0];
+    if (payments.length === 1 && onlyPayment) {
+      await prisma.payment.update({
+        where: { id: onlyPayment.id },
+        data: { date: payDate },
+      });
+      return;
+    }
+    const manualPayment = payments.find((payment) =>
+      payment.description.includes('Payment recorded when invoice marked as paid')
+    );
+    if (manualPayment) {
+      await prisma.payment.update({
+        where: { id: manualPayment.id },
+        data: { date: payDate },
+      });
+    }
+  }
+
   private static async ensurePaymentLedgerForPaidInvoice(
     invoiceId: string,
     patientId: string,
-    invoiceAmount: number
+    invoiceAmount: number,
+    paymentDate?: Date | string | null,
+    fallbackDate?: Date | string
   ): Promise<void> {
     const priorPaid = await prisma.payment.aggregate({
       where: { invoiceId, status: PaymentStatus.COMPLETED },
@@ -882,6 +935,7 @@ export class BillingService {
       method: 'Manual adjustment',
       description: 'Payment recorded when invoice marked as paid',
       status: PaymentStatus.COMPLETED,
+      date: this.resolvePaymentDate(paymentDate, fallbackDate ?? new Date()),
     });
   }
 
@@ -952,7 +1006,16 @@ export class BillingService {
       });
 
       if (data.status === InvoiceStatus.PAID) {
-        await this.ensurePaymentLedgerForPaidInvoice(invoice.id, invoice.patientId, invoice.amount);
+        await this.ensurePaymentLedgerForPaidInvoice(
+          invoice.id,
+          invoice.patientId,
+          invoice.amount,
+          data.paymentDate,
+          data.date ?? existing.date
+        );
+        if (data.paymentDate != null && data.paymentDate !== '') {
+          await this.syncInvoicePaymentDate(invoice.id, data.paymentDate);
+        }
         return this.finalizePaidInvoiceUpdate(invoice.id);
       }
 
@@ -985,8 +1048,21 @@ export class BillingService {
     });
 
     if (data.status === InvoiceStatus.PAID) {
-      await this.ensurePaymentLedgerForPaidInvoice(invoice.id, invoice.patientId, invoice.amount);
+      await this.ensurePaymentLedgerForPaidInvoice(
+        invoice.id,
+        invoice.patientId,
+        invoice.amount,
+        data.paymentDate,
+        data.date ?? existing.date
+      );
+      if (data.paymentDate != null && data.paymentDate !== '') {
+        await this.syncInvoicePaymentDate(invoice.id, data.paymentDate);
+      }
       return this.finalizePaidInvoiceUpdate(invoice.id);
+    }
+
+    if (data.paymentDate != null && data.paymentDate !== '' && existing.status === InvoiceStatus.PAID) {
+      await this.syncInvoicePaymentDate(id, data.paymentDate);
     }
 
     return toInvoiceApiShape(invoice) as any;
@@ -1008,7 +1084,7 @@ export class BillingService {
       method: data.method,
       description: data.description,
       status: data.status ?? PaymentStatus.COMPLETED,
-      date: new Date(),
+      date: data.date ? toDate(data.date, 'date') : new Date(),
     };
 
     if (data.transactionId !== undefined) {

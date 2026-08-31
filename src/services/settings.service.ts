@@ -42,8 +42,8 @@ const BACKUP_CATEGORY = 'settings_backup';
 
 const defaultSystemSettings = (): SystemSettings => ({
   siteName: 'Teamwork Homecare',
-  siteEmail: 'support@homecare.com',
-  sitePhone: '+1234567890',
+  siteEmail: 'Info@teamworkhomecare.com',
+  sitePhone: '0200909453',
   maintenanceMode: false,
   registrationEnabled: true,
   emailVerificationRequired: true,

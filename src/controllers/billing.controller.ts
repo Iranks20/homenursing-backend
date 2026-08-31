@@ -100,6 +100,11 @@ const parseOptionalDocumentNumber = (value: unknown): string | null | undefined 
   return trimmed === '' ? null : trimmed;
 };
 
+const parseOptionalDate = (value: unknown, field: string): Date | undefined => {
+  if (value === undefined || value === null || value === '') return undefined;
+  return parseDate(value, field);
+};
+
 const parseInvoicePayload = (body: unknown): CreateInvoiceData => {
   const data = body as Record<string, unknown>;
   const patientId = data.patientId as string | undefined;
@@ -122,6 +127,9 @@ const parseInvoicePayload = (body: unknown): CreateInvoiceData => {
   if (displayInvoiceNumber !== undefined) payload.displayInvoiceNumber = displayInvoiceNumber;
   const displayReceiptNumber = parseOptionalDocumentNumber(data.displayReceiptNumber);
   if (displayReceiptNumber !== undefined) payload.displayReceiptNumber = displayReceiptNumber;
+
+  const paymentDate = parseOptionalDate(data.paymentDate, 'paymentDate');
+  if (paymentDate !== undefined) payload.paymentDate = paymentDate;
 
   if (Array.isArray(data.lines) && data.lines.length > 0) {
     payload.lines = parseLineInputs(data.lines, 'lines');
@@ -157,6 +165,9 @@ const parseInvoiceUpdatePayload = (body: unknown): UpdateInvoiceData => {
   if (displayInvoiceNumber !== undefined) payload.displayInvoiceNumber = displayInvoiceNumber;
   const displayReceiptNumber = parseOptionalDocumentNumber(data.displayReceiptNumber);
   if (displayReceiptNumber !== undefined) payload.displayReceiptNumber = displayReceiptNumber;
+
+  const paymentDate = parseOptionalDate(data.paymentDate, 'paymentDate');
+  if (paymentDate !== undefined) payload.paymentDate = paymentDate;
 
   if (data.lines !== undefined) {
     if (!Array.isArray(data.lines)) {
@@ -203,6 +214,10 @@ const parsePaymentPayload = (body: unknown): CreatePaymentData => {
   if (data.transactionId !== undefined) payload.transactionId = data.transactionId as string;
   const status = parseEnum(PaymentStatus, data.status, 'status', false);
   if (status !== undefined) payload.status = status;
+
+  const paymentDate =
+    parseOptionalDate(data.date, 'date') ?? parseOptionalDate(data.paymentDate, 'paymentDate');
+  if (paymentDate !== undefined) payload.date = paymentDate;
 
   return payload;
 };
