@@ -357,11 +357,44 @@ function mapResolvedLineToCreate(r: ResolvedLine, sortOrder: number) {
   };
 }
 
-async function getNextInvoiceNumber(): Promise<string> {
-  const rows = await prisma.$queryRaw<Array<{ next: number | bigint }>>`
-    SELECT COALESCE(MAX(CAST("invoiceNumber" AS INTEGER)), 0) + 1 AS next
+async function maxNumericInvoiceNumber(): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ max: number | bigint | null }>>`
+    SELECT MAX(CAST("invoiceNumber" AS INTEGER)) AS max
     FROM "invoices"
     WHERE "invoiceNumber" ~ '^[0-9]+$'
+  `;
+  const max = Number(rows[0]?.max ?? 0);
+  return Number.isFinite(max) && max > 0 ? max : 0;
+}
+
+async function syncInvoiceNumberSequence(): Promise<void> {
+  const max = await maxNumericInvoiceNumber();
+  await prisma.$executeRaw`
+    SELECT setval('invoice_number_seq', ${max}::bigint, true)
+  `;
+}
+
+let invoiceSequenceReady: Promise<void> | null = null;
+
+async function ensureInvoiceNumberSequence(): Promise<void> {
+  await prisma.$executeRaw`CREATE SEQUENCE IF NOT EXISTS invoice_number_seq`;
+  await syncInvoiceNumberSequence();
+}
+
+function prepareInvoiceNumberSequence(): Promise<void> {
+  if (!invoiceSequenceReady) {
+    invoiceSequenceReady = ensureInvoiceNumberSequence().catch((error) => {
+      invoiceSequenceReady = null;
+      throw error;
+    });
+  }
+  return invoiceSequenceReady;
+}
+
+async function getNextInvoiceNumber(): Promise<string> {
+  await prepareInvoiceNumberSequence();
+  const rows = await prisma.$queryRaw<Array<{ next: number | bigint }>>`
+    SELECT nextval('invoice_number_seq') AS next
   `;
   const next = Number(rows[0]?.next ?? 1);
   const safeNext = Number.isFinite(next) && next > 0 ? next : 1;
@@ -769,6 +802,7 @@ export class BillingService {
         break;
       } catch (error) {
         if (isInvoiceNumberConflict(error) && attempt < 4) {
+          await syncInvoiceNumberSequence();
           lastError = error;
           continue;
         }
