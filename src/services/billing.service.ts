@@ -358,8 +358,28 @@ function mapResolvedLineToCreate(r: ResolvedLine, sortOrder: number) {
 }
 
 async function getNextInvoiceNumber(): Promise<string> {
-  const count = await prisma.invoice.count();
-  return String(count + 1).padStart(PAD_LEN, '0');
+  const rows = await prisma.$queryRaw<Array<{ next: number | bigint }>>`
+    SELECT COALESCE(MAX(CAST("invoiceNumber" AS INTEGER)), 0) + 1 AS next
+    FROM "invoices"
+    WHERE "invoiceNumber" ~ '^[0-9]+$'
+  `;
+  const next = Number(rows[0]?.next ?? 1);
+  const safeNext = Number.isFinite(next) && next > 0 ? next : 1;
+  return String(safeNext).padStart(PAD_LEN, '0');
+}
+
+function isInvoiceNumberConflict(error: unknown): boolean {
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('code' in error) ||
+    (error as { code: string }).code !== 'P2002'
+  ) {
+    return false;
+  }
+  const target = (error as { meta?: { target?: string[] } }).meta?.target;
+  if (!target || target.length === 0) return true;
+  return target.includes('invoiceNumber');
 }
 
 export class BillingService {
@@ -713,31 +733,52 @@ export class BillingService {
   static async createInvoice(data: CreateInvoiceData): Promise<Invoice> {
     const resolved = await this.resolveCreateLines(data);
     const total = resolved.reduce((s, l) => s + l.lineAmount, 0);
-    const invoiceNumber = await getNextInvoiceNumber();
     const firstLine = resolved[0];
     if (!firstLine) {
       throw new CustomError('Invoice has no lines', 400);
     }
     const primaryServiceId = firstLine.serviceId;
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        invoiceNumber,
-        displayInvoiceNumber: data.displayInvoiceNumber?.trim() || null,
-        displayReceiptNumber: data.displayReceiptNumber?.trim() || null,
-        patientId: data.patientId,
-        serviceId: primaryServiceId,
-        amount: total,
-        date: toDate(data.date, 'date'),
-        dueDate: toDate(data.dueDate, 'dueDate'),
-        description: data.description,
-        status: data.status ?? InvoiceStatus.PENDING,
-        lineItems: {
-          create: resolved.map((r, i) => mapResolvedLineToCreate(r, i)),
-        },
+    const createData = {
+      displayInvoiceNumber: data.displayInvoiceNumber?.trim() || null,
+      displayReceiptNumber: data.displayReceiptNumber?.trim() || null,
+      patientId: data.patientId,
+      serviceId: primaryServiceId,
+      amount: total,
+      date: toDate(data.date, 'date'),
+      dueDate: toDate(data.dueDate, 'dueDate'),
+      description: data.description,
+      status: data.status ?? InvoiceStatus.PENDING,
+      lineItems: {
+        create: resolved.map((r, i) => mapResolvedLineToCreate(r, i)),
       },
-      include: invoiceDetailInclude,
-    });
+    };
+
+    let invoice: Prisma.InvoiceGetPayload<{ include: typeof invoiceDetailInclude }> | null = null;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const invoiceNumber = await getNextInvoiceNumber();
+      try {
+        invoice = await prisma.invoice.create({
+          data: {
+            invoiceNumber,
+            ...createData,
+          },
+          include: invoiceDetailInclude,
+        });
+        break;
+      } catch (error) {
+        if (isInvoiceNumberConflict(error) && attempt < 4) {
+          lastError = error;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!invoice) {
+      throw lastError instanceof Error ? lastError : new CustomError('Unable to assign invoice number', 500);
+    }
 
     logger.info('Invoice created', { invoiceId: invoice.id });
     if ((data.status ?? InvoiceStatus.PENDING) === InvoiceStatus.PAID) {
