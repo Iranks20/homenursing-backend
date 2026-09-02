@@ -19,6 +19,12 @@ export interface CreateNurseData {
   avatar?: string;
   payFrequency?: 'WEEKLY' | 'MONTHLY' | null;
   workStartDate?: Date | null;
+  /** Where the nurse actually stays/lives. */
+  location?: string | null;
+  nextOfKinName1?: string | null;
+  nextOfKinPhone1?: string | null;
+  nextOfKinName2?: string | null;
+  nextOfKinPhone2?: string | null;
 }
 
 export type UpdateNurseData = Partial<CreateNurseData> & { status?: NurseStatus };
@@ -83,6 +89,11 @@ export class NurseService {
         hireDate: new Date(data.hireDate),
         email: emailVal,
         avatar: data.avatar && data.avatar !== '' ? data.avatar : null,
+        location: data.location?.trim() || null,
+        nextOfKinName1: data.nextOfKinName1?.trim() || null,
+        nextOfKinPhone1: data.nextOfKinPhone1?.trim() || null,
+        nextOfKinName2: data.nextOfKinName2?.trim() || null,
+        nextOfKinPhone2: data.nextOfKinPhone2?.trim() || null,
       } as Prisma.NurseCreateInput,
     });
 
@@ -187,6 +198,11 @@ export class NurseService {
       updateData.dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
     }
     if (data.avatar !== undefined) updateData.avatar = data.avatar;
+    if (data.location !== undefined) updateData.location = data.location?.trim() || null;
+    if (data.nextOfKinName1 !== undefined) updateData.nextOfKinName1 = data.nextOfKinName1?.trim() || null;
+    if (data.nextOfKinPhone1 !== undefined) updateData.nextOfKinPhone1 = data.nextOfKinPhone1?.trim() || null;
+    if (data.nextOfKinName2 !== undefined) updateData.nextOfKinName2 = data.nextOfKinName2?.trim() || null;
+    if (data.nextOfKinPhone2 !== undefined) updateData.nextOfKinPhone2 = data.nextOfKinPhone2?.trim() || null;
     if (data.status !== undefined) updateData.status = data.status;
     if (data.payFrequency === null) {
       throw new CustomError('Pay frequency is required', 400);
