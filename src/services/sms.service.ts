@@ -64,7 +64,7 @@ const DEFAULT_TEMPLATES: SmsTemplate[] = [
     name: 'Medication Prescription',
     category: 'prescription',
     message:
-      'Hi {{name}}, please take {{medication}} as prescribed. Reach out if you experience any issues. - Teamwork Physiotherapy',
+      'Hi {{name}}, please take {{medication}} as prescribed. Reach out if you experience any issues. - Teamwork Homecare',
     isSystem: true,
   },
   {
@@ -72,7 +72,7 @@ const DEFAULT_TEMPLATES: SmsTemplate[] = [
     name: 'Happy Birthday',
     category: 'birthday',
     message:
-      'Happy Birthday {{name}}! Wishing you health and joy this year. - Teamwork Physiotherapy',
+      'Happy Birthday {{name}}! Wishing you health and joy this year. - Teamwork Homecare',
     isSystem: true,
   },
   {
@@ -88,7 +88,7 @@ const DEFAULT_TEMPLATES: SmsTemplate[] = [
     name: 'Appointment Confirmation',
     category: 'appointment',
     message:
-      'Hi {{name}}, your appointment is scheduled for {{date}} at {{time}}. - Teamwork Physiotherapy',
+      'Hi {{name}}, your appointment is scheduled for {{date}} at {{time}}. - Teamwork Homecare',
     isSystem: true,
   },
 ];
@@ -157,7 +157,8 @@ export type DirectoryRecipientType =
   | 'receptionist'
   | 'biller'
   | 'admin'
-  | 'lab_attendant';
+  | 'lab_attendant'
+  | 'visitor';
 
 export interface DirectoryRecipient {
   id: string;
@@ -180,7 +181,10 @@ export interface DirectoryResult {
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
-const STAFF_USER_ROLES: Record<Exclude<DirectoryRecipientType, 'patient' | 'nurse' | 'specialist' | 'therapist'>, UserRole> = {
+const STAFF_USER_ROLES: Record<
+  Exclude<DirectoryRecipientType, 'patient' | 'nurse' | 'specialist' | 'therapist' | 'visitor'>,
+  UserRole
+> = {
   receptionist: UserRole.RECEPTIONIST,
   biller: UserRole.BILLER,
   admin: UserRole.ADMIN,
@@ -196,6 +200,7 @@ const ALL_DIRECTORY_TYPES: DirectoryRecipientType[] = [
   'biller',
   'admin',
   'lab_attendant',
+  'visitor',
 ];
 
 export class SmsService {
@@ -541,6 +546,47 @@ export class SmsService {
         };
       }
 
+      if (kind === 'visitor') {
+        const where: Prisma.VisitorWhereInput = {
+          isActive: true,
+          ...(search
+            ? {
+                OR: [
+                  { name: { contains: search, mode: 'insensitive' } },
+                  { phone: { contains: search, mode: 'insensitive' } },
+                  { email: { contains: search, mode: 'insensitive' } },
+                  { company: { contains: search, mode: 'insensitive' } },
+                  { purpose: { contains: search, mode: 'insensitive' } },
+                ],
+              }
+            : {}),
+        };
+        const [rows, total] = await Promise.all([
+          prisma.visitor.findMany({
+            where,
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, phone: true, email: true, company: true, purpose: true },
+            skip: fetchSkip,
+            take: fetchTake,
+          }),
+          prisma.visitor.count({ where }),
+        ]);
+        return {
+          items: rows.map((row) => {
+            const item: DirectoryRecipient = {
+              id: row.id,
+              name: row.name,
+              phone: row.phone ?? '',
+              type: 'visitor',
+            };
+            if (row.email) item.email = row.email;
+            item.subtitle = row.company || row.purpose || 'Visitor';
+            return item;
+          }),
+          total,
+        };
+      }
+
       const role = STAFF_USER_ROLES[kind];
       const where: Prisma.UserWhereInput = {
         role,
@@ -637,7 +683,7 @@ export class SmsService {
     if (input.providerName) {
       parts.push(`Your provider: ${input.providerName}.`);
     }
-    parts.push('- Teamwork Physiotherapy');
+    parts.push('- Teamwork Homecare');
 
     const sendInput: SendSmsInput = {
       message: parts.join(' '),
@@ -683,7 +729,7 @@ export class SmsService {
     if (input.serviceName) {
       parts.push(`(${input.serviceName})`);
     }
-    parts.push('. - Teamwork Physiotherapy');
+    parts.push('. - Teamwork Homecare');
 
     const sendInput: SendSmsInput = {
       message: parts.join(' '),
@@ -721,7 +767,7 @@ export class SmsService {
     const birthdayTemplate = templates.find((t) => t.category === 'birthday' && t.isSystem);
     const templateMessage =
       birthdayTemplate?.message ??
-      'Happy Birthday {{name}}! Wishing you health and joy this year. - Teamwork Physiotherapy';
+      'Happy Birthday {{name}}! Wishing you health and joy this year. - Teamwork Homecare';
 
     const message = templateMessage.replace(/\{\{\s*name\s*\}\}/gi, input.recipientName || 'there');
 

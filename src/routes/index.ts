@@ -19,6 +19,8 @@ import referralRoutes from './referral.routes';
 import staffPaymentRoutes from './staffPayment.routes';
 import certificatePaymentRoutes from './certificatePayment.routes';
 import billingRoutes from './billing.routes';
+import smsRoutes from './sms.routes';
+import visitorRoutes from './visitor.routes';
 
 const router = Router();
 
@@ -96,6 +98,8 @@ router.get('/v1', (req, res) => {
       referrals: '/api/v1/referrals/*',
       staffPayments: '/api/v1/staff-payments/*',
       payments: '/api/v1/payments/*',
+      sms: '/api/v1/sms/*',
+      visitors: '/api/v1/visitors/*',
     },
   });
 });
@@ -119,5 +123,7 @@ router.use('/v1/referrals', referralRoutes);
 router.use('/v1/staff-payments', staffPaymentRoutes);
 router.use('/v1/payments', certificatePaymentRoutes);
 router.use('/v1/billing', billingRoutes);
+router.use('/v1/sms', smsRoutes);
+router.use('/v1/visitors', visitorRoutes);
 
 export default router;

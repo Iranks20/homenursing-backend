@@ -11,6 +11,8 @@ import app from './app';
 import { ENV_CONFIG } from './config/environment';
 import { connectDatabase } from './config/database';
 import { logger } from './utils/logger';
+import { startAppointmentSmsReminderJob } from './jobs/appointmentSmsReminder.job';
+import { startBirthdaySmsJob } from './jobs/birthdaySms.job';
 
 const maskDatabaseUrl = (url: string): string => {
   try {
@@ -32,6 +34,9 @@ const startServer = async () => {
     });
     await connectDatabase();
     logger.info('Database connection established');
+
+    startAppointmentSmsReminderJob();
+    startBirthdaySmsJob();
 
     const server = app.listen(ENV_CONFIG.PORT, '0.0.0.0', () => {
       logger.info(`🚀 Server running on port ${ENV_CONFIG.PORT}`);

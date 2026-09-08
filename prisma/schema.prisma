@@ -695,6 +695,24 @@ model Feedback {
   @@map("feedback")
 }
 
+model Visitor {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  email     String?
+  company   String?
+  purpose   String?
+  notes     String?
+  visitedAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
+  @@index([visitedAt])
+  @@map("visitors")
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?

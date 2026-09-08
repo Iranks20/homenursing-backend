@@ -60,6 +60,7 @@ const DIRECTORY_TYPES: DirectoryRecipientType[] = [
   'biller',
   'admin',
   'lab_attendant',
+  'visitor',
 ];
 
 const parseDirectoryType = (value: unknown): DirectoryRecipientType | 'all' | undefined => {
