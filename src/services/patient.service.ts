@@ -23,6 +23,7 @@ export interface CreatePatientData {
   status?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  emergencyContactRelation?: string;
   medicalHistoryNotes?: string;
   currentMedications?: string;
   allergies?: string;
@@ -48,6 +49,7 @@ export interface UpdatePatientData {
   status?: PatientStatus;
   emergencyContact?: string;
   emergencyPhone?: string;
+  emergencyContactRelation?: string;
   medicalHistoryNotes?: string;
   currentMedications?: string;
   allergies?: string;
@@ -153,6 +155,7 @@ export class PatientService {
       status: data.status ? (data.status.toUpperCase() as 'ACTIVE' | 'DISCHARGED' | 'PENDING') : 'ACTIVE',
       emergencyContact: data.emergencyContact ?? null,
       emergencyPhone: data.emergencyPhone ?? null,
+      emergencyContactRelation: data.emergencyContactRelation?.trim() || null,
       medicalHistoryNotes: data.medicalHistoryNotes ?? null,
       currentMedications: data.currentMedications ?? null,
       allergies: data.allergies ?? null,
@@ -484,6 +487,9 @@ export class PatientService {
     }
     if (data.emergencyContact !== undefined) updateData.emergencyContact = data.emergencyContact || null;
     if (data.emergencyPhone !== undefined) updateData.emergencyPhone = data.emergencyPhone || null;
+    if (data.emergencyContactRelation !== undefined) {
+      updateData.emergencyContactRelation = data.emergencyContactRelation?.trim() || null;
+    }
     if (data.medicalHistoryNotes !== undefined) updateData.medicalHistoryNotes = data.medicalHistoryNotes || null;
     if (data.currentMedications !== undefined) updateData.currentMedications = data.currentMedications || null;
     if (data.allergies !== undefined) updateData.allergies = data.allergies || null;

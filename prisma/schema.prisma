@@ -108,6 +108,7 @@ model Patient {
   // Additional patient information
   emergencyContact      String?
   emergencyPhone        String?
+  emergencyContactRelation String?
   medicalHistoryNotes   String?
   currentMedications    String?
   allergies             String?

@@ -8,7 +8,10 @@ export const createPatientSchema = Joi.object({
   dateOfBirth: Joi.date().required(),
   address: Joi.string().required(),
   location: Joi.string().max(500).allow('', null).optional(),
-  condition: Joi.string().allow('', null).optional(),
+  condition: Joi.string().min(1).max(500).required().messages({
+    'string.empty': 'Disease / condition is required',
+    'any.required': 'Disease / condition is required',
+  }),
   assignedNurseId: Joi.string().allow('', null).optional().custom((value) => {
     return value === '' ? null : value;
   }),
@@ -46,6 +49,7 @@ export const createPatientSchema = Joi.object({
   zipCode: Joi.string().allow('', null).optional(),
   emergencyContact: Joi.string().allow('', null).optional(),
   emergencyPhone: Joi.string().allow('', null).optional(),
+  emergencyContactRelation: Joi.string().max(100).allow('', null).optional(),
   medicalHistory: Joi.string().allow('', null).optional().custom((value) => {
     // Convert empty string to null for database
     return value === '' ? null : value;
@@ -109,6 +113,7 @@ export const updatePatientSchema = Joi.object({
   zipCode: Joi.string().allow('', null).optional(),
   emergencyContact: Joi.string().allow('', null).optional(),
   emergencyPhone: Joi.string().allow('', null).optional(),
+  emergencyContactRelation: Joi.string().max(100).allow('', null).optional(),
   medicalHistory: Joi.string().allow('', null).optional().custom((value) => {
     // Convert empty string to null for database
     return value === '' ? null : value;
