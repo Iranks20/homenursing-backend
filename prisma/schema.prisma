@@ -28,6 +28,7 @@ model User {
   consultationFee          Int?                      // Consultation fee in UGX (set by biller for SPECIALIST/THERAPIST)
   payFrequency             PayFrequency?
   workStartDate            DateTime?
+  payAmount                Int?
   isActive                 Boolean                   @default(true)
   isVerified               Boolean                   @default(false)
   lastLoginAt              DateTime?

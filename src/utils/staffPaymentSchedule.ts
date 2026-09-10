@@ -5,6 +5,7 @@ export interface PaymentScheduleEntry {
   label: string;
   isPast: boolean;
   isNext: boolean;
+  amount?: number | null;
 }
 
 export function buildStaffPaymentSchedule(

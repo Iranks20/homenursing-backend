@@ -19,6 +19,7 @@ export interface CreateNurseData {
   avatar?: string;
   payFrequency?: 'WEEKLY' | 'MONTHLY' | null;
   workStartDate?: Date | null;
+  payAmount?: number | null;
   /** Where the nurse actually stays/lives. */
   location?: string | null;
   nextOfKinName1?: string | null;
@@ -72,6 +73,8 @@ export class NurseService {
         licenseNumber: licenseForUser,
         payFrequency: data.payFrequency,
         workStartDate: data.workStartDate ?? new Date(data.hireDate),
+        payAmount:
+          data.payAmount != null && data.payAmount > 0 ? Math.round(data.payAmount) : null,
         ...(data.dateOfBirth ? { dateOfBirth: new Date(data.dateOfBirth) } : {}),
       } as Prisma.UserCreateInput,
     });
@@ -115,7 +118,7 @@ export class NurseService {
     const linkedUser = nurse.email
       ? await prisma.user.findFirst({
           where: { email: nurse.email, role: UserRole.NURSE },
-          select: { username: true, payFrequency: true, workStartDate: true },
+          select: { username: true, payFrequency: true, workStartDate: true, payAmount: true },
         })
       : null;
     return {
@@ -123,6 +126,7 @@ export class NurseService {
       username: linkedUser?.username ?? null,
       payFrequency: linkedUser?.payFrequency ?? null,
       workStartDate: linkedUser?.workStartDate ?? null,
+      payAmount: linkedUser?.payAmount ?? null,
     } as Nurse;
   }
 
@@ -143,7 +147,7 @@ export class NurseService {
     const linkedUsers = nurseEmails.length
       ? await prisma.user.findMany({
           where: { role: UserRole.NURSE, email: { in: nurseEmails } },
-          select: { email: true, username: true, payFrequency: true, workStartDate: true },
+          select: { email: true, username: true, payFrequency: true, workStartDate: true, payAmount: true },
         })
       : [];
     const usersByEmail = new Map(
@@ -157,6 +161,7 @@ export class NurseService {
         username: linkedUser?.username ?? null,
         payFrequency: linkedUser?.payFrequency ?? null,
         workStartDate: linkedUser?.workStartDate ?? null,
+        payAmount: linkedUser?.payAmount ?? null,
       };
     });
 
@@ -226,6 +231,10 @@ export class NurseService {
         userUpdate.licenseNumber = data.licenseNumber?.trim() || null;
       }
       if (data.payFrequency !== undefined) userUpdate.payFrequency = data.payFrequency;
+      if (data.payAmount !== undefined) {
+        userUpdate.payAmount =
+          data.payAmount != null && data.payAmount > 0 ? Math.round(data.payAmount) : null;
+      }
       if (data.workStartDate !== undefined) {
         userUpdate.workStartDate = data.workStartDate ? new Date(data.workStartDate) : null;
       } else if (data.hireDate !== undefined) {

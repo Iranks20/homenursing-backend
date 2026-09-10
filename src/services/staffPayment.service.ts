@@ -11,6 +11,7 @@ export interface StaffPaymentScheduleItem {
   role: UserRole;
   payFrequency?: PayFrequency;
   workStartDate?: string;
+  payAmount?: number | null;
   nextPaymentDate?: string;
   paymentSchedule: ReturnType<typeof buildStaffPaymentSchedule>;
 }
@@ -41,17 +42,22 @@ export class StaffPaymentService {
         role: true,
         payFrequency: true,
         workStartDate: true,
+        payAmount: true,
       },
     });
 
     return users.map((user) => {
       const workStartDate = user.workStartDate ?? undefined;
       const payFrequency = user.payFrequency ?? undefined;
+      const payAmount = user.payAmount ?? null;
       let paymentSchedule: StaffPaymentScheduleItem['paymentSchedule'] = [];
       let nextPaymentDate: string | undefined;
 
       if (workStartDate && payFrequency) {
-        paymentSchedule = buildStaffPaymentSchedule(workStartDate, payFrequency);
+        paymentSchedule = buildStaffPaymentSchedule(workStartDate, payFrequency).map((entry) => ({
+          ...entry,
+          amount: payAmount,
+        }));
         const next = getNextPaymentDate(workStartDate, payFrequency);
         nextPaymentDate = next?.toISOString();
       }
@@ -63,6 +69,7 @@ export class StaffPaymentService {
         role: user.role,
         payFrequency,
         workStartDate: workStartDate?.toISOString(),
+        payAmount,
         nextPaymentDate,
         paymentSchedule,
       };

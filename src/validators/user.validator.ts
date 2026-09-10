@@ -27,6 +27,7 @@ export const createUserSchema = Joi.object({
   department: Joi.string().optional(),
   payFrequency: Joi.string().valid('WEEKLY', 'MONTHLY').optional().allow(null),
   workStartDate: Joi.date().iso().optional().allow(null),
+  payAmount: Joi.number().integer().min(0).allow(null).optional(),
   avatar: Joi.string().allow('', null).optional().custom((value, helpers) => {
     if (value === '' || !value) return undefined;
     const uriRegex = /^https?:\/\/.+/;
@@ -71,6 +72,7 @@ export const updateUserSchema = Joi.object({
   consultationFee: Joi.number().integer().min(0).allow(null).optional(),
   payFrequency: Joi.string().valid('WEEKLY', 'MONTHLY').optional().allow(null),
   workStartDate: Joi.date().iso().optional().allow(null),
+  payAmount: Joi.number().integer().min(0).allow(null).optional(),
   isActive: Joi.boolean().optional(),
 }).unknown(false);
 

@@ -16,6 +16,7 @@ export interface CreateUserData {
   avatar?: string;
   payFrequency?: PayFrequency | null;
   workStartDate?: Date | null;
+  payAmount?: number | null;
 }
 
 export interface UpdateUserData {
@@ -37,6 +38,7 @@ export interface UpdateUserData {
   dateOfBirth?: Date | null;
   payFrequency?: PayFrequency | null;
   workStartDate?: Date | null;
+  payAmount?: number | null;
 }
 
 export interface UserFilters {
@@ -96,6 +98,7 @@ export class UserService {
         consultationFee: true,
         payFrequency: true,
         workStartDate: true,
+        payAmount: true,
         isActive: true,
         isVerified: true,
         lastLoginAt: true,
@@ -132,6 +135,7 @@ export class UserService {
         consultationFee: true,
         payFrequency: true,
         workStartDate: true,
+        payAmount: true,
         isActive: true,
         isVerified: true,
         lastLoginAt: true,
@@ -290,6 +294,10 @@ export class UserService {
     if (data.workStartDate !== undefined) {
       updateData.workStartDate = data.workStartDate ? new Date(data.workStartDate) : null;
     }
+    if (data.payAmount !== undefined) {
+      updateData.payAmount =
+        data.payAmount != null && data.payAmount > 0 ? Math.round(data.payAmount) : null;
+    }
     if (data.password) {
       updateData.password = await PasswordService.hashPassword(data.password);
     }
@@ -315,6 +323,7 @@ export class UserService {
         consultationFee: true,
         payFrequency: true,
         workStartDate: true,
+        payAmount: true,
         isActive: true,
         isVerified: true,
         lastLoginAt: true,
@@ -357,6 +366,7 @@ export class UserService {
         consultationFee: true,
         payFrequency: true,
         workStartDate: true,
+        payAmount: true,
         isActive: true,
         isVerified: true,
         lastLoginAt: true,
@@ -411,6 +421,7 @@ export class UserService {
         consultationFee: true,
         payFrequency: true,
         workStartDate: true,
+        payAmount: true,
         isActive: true,
         isVerified: true,
         lastLoginAt: true,
