@@ -30,78 +30,133 @@ export interface CreateNurseData {
 
 export type UpdateNurseData = Partial<CreateNurseData> & { status?: NurseStatus };
 
+function parsePositiveInt(value: unknown, fieldLabel: string): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new CustomError(`${fieldLabel} must be a valid number`, 400);
+  }
+  return Math.round(parsed);
+}
+
 export class NurseService {
   static async createNurse(data: CreateNurseData): Promise<Nurse> {
     const emailVal = data.email?.trim() || null;
     if (emailVal) {
-      const existingUser = await prisma.user.findUnique({ where: { email: emailVal.toLowerCase() } });
+      const existingUser = await prisma.user.findFirst({
+        where: { email: { equals: emailVal, mode: 'insensitive' } },
+      });
       if (existingUser) throw new CustomError('User with this email already exists', 409);
-      const existingNurse = await prisma.nurse.findUnique({
-        where: { email: emailVal }
+      const existingNurse = await prisma.nurse.findFirst({
+        where: { email: { equals: emailVal, mode: 'insensitive' } },
       });
       if (existingNurse) {
         throw new CustomError('Nurse with this email already exists', 409);
       }
     }
 
-    // Validate password
     if (!data.password || data.password.length < 8) {
       throw new CustomError('Password must be at least 8 characters long', 400);
     }
 
-    // Hash password
     const hashedPassword = await PasswordService.hashPassword(data.password);
 
     const usernameNormalized = (data.username || '').trim().toLowerCase();
     if (!usernameNormalized) throw new CustomError('Username is required', 400);
     if (!data.payFrequency) throw new CustomError('Pay frequency is required', 400);
-    const existingByUsername = await prisma.user.findUnique({ where: { username: usernameNormalized } });
-    if (existingByUsername) throw new CustomError('Username is already taken', 409);
 
-    const licenseForUser: string | null = data.licenseNumber?.trim() || null;
-    const user = await prisma.user.create({
-      data: {
-        username: usernameNormalized,
-        name: data.name,
-        password: hashedPassword,
-        role: UserRole.NURSE,
-        phone: data.phone,
-        department: 'Home Care',
-        isActive: true,
-        isVerified: true,
-        email: emailVal,
-        licenseNumber: licenseForUser,
-        payFrequency: data.payFrequency,
-        workStartDate: data.workStartDate ?? new Date(data.hireDate),
-        payAmount:
-          data.payAmount != null && data.payAmount > 0 ? Math.round(data.payAmount) : null,
-        ...(data.dateOfBirth ? { dateOfBirth: new Date(data.dateOfBirth) } : {}),
-      } as Prisma.UserCreateInput,
+    const existingByUsername = await prisma.user.findFirst({
+      where: { username: { equals: usernameNormalized, mode: 'insensitive' } },
     });
+    if (existingByUsername) {
+      throw new CustomError(
+        `Username "${usernameNormalized}" is already taken. Please choose a different username.`,
+        409
+      );
+    }
 
+    const experience = parsePositiveInt(data.experience, 'Experience');
+    let payAmount: number | null = null;
+    if (data.payAmount !== undefined && data.payAmount !== null && String(data.payAmount).trim() !== '') {
+      const parsedPay = parsePositiveInt(data.payAmount, 'Pay amount');
+      payAmount = parsedPay > 0 ? parsedPay : null;
+    }
     const licenseNumberValue: string | null = data.licenseNumber?.trim() || null;
-    const nurse = await prisma.nurse.create({
-      data: {
-        name: data.name,
-        phone: data.phone,
-        ...(data.dateOfBirth ? { dateOfBirth: new Date(data.dateOfBirth) } : {}),
-        licenseNumber: licenseNumberValue,
-        specialization: data.specialization,
-        experience: data.experience,
-        certifications: data.certifications ?? [],
-        hireDate: new Date(data.hireDate),
-        email: emailVal,
-        avatar: data.avatar && data.avatar !== '' ? data.avatar : null,
-        location: data.location?.trim() || null,
-        nextOfKinName1: data.nextOfKinName1?.trim() || null,
-        nextOfKinPhone1: data.nextOfKinPhone1?.trim() || null,
-        nextOfKinName2: data.nextOfKinName2?.trim() || null,
-        nextOfKinPhone2: data.nextOfKinPhone2?.trim() || null,
-      } as Prisma.NurseCreateInput,
-    });
+    const hireDate = new Date(data.hireDate);
+    if (Number.isNaN(hireDate.getTime())) {
+      throw new CustomError('Hire date is invalid', 400);
+    }
+    const workStartDate = data.workStartDate ? new Date(data.workStartDate) : hireDate;
+    if (Number.isNaN(workStartDate.getTime())) {
+      throw new CustomError('Work start date is invalid', 400);
+    }
+    const dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
+    if (data.dateOfBirth && dateOfBirth && Number.isNaN(dateOfBirth.getTime())) {
+      throw new CustomError('Date of birth is invalid', 400);
+    }
 
-    logger.info('Nurse created with user account', { nurseId: nurse.id, userId: user.id });
-    return nurse;
+    try {
+      const nurse = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            username: usernameNormalized,
+            name: data.name,
+            password: hashedPassword,
+            role: UserRole.NURSE,
+            phone: data.phone,
+            department: 'Home Care',
+            isActive: true,
+            isVerified: true,
+            email: emailVal,
+            licenseNumber: licenseNumberValue,
+            payFrequency: data.payFrequency as PayFrequency,
+            workStartDate,
+            payAmount,
+            ...(dateOfBirth ? { dateOfBirth } : {}),
+          },
+        });
+
+        const created = await tx.nurse.create({
+          data: {
+            name: data.name,
+            phone: data.phone,
+            ...(dateOfBirth ? { dateOfBirth } : {}),
+            licenseNumber: licenseNumberValue,
+            specialization: data.specialization,
+            experience,
+            certifications: data.certifications ?? [],
+            hireDate,
+            email: emailVal,
+            avatar: data.avatar && data.avatar !== '' ? data.avatar : null,
+            location: data.location?.trim() || null,
+            nextOfKinName1: data.nextOfKinName1?.trim() || null,
+            nextOfKinPhone1: data.nextOfKinPhone1?.trim() || null,
+            nextOfKinName2: data.nextOfKinName2?.trim() || null,
+            nextOfKinPhone2: data.nextOfKinPhone2?.trim() || null,
+          },
+        });
+
+        logger.info('Nurse created with user account', { nurseId: created.id, userId: user.id });
+        return created;
+      });
+
+      return nurse;
+    } catch (error: any) {
+      if (error instanceof CustomError) throw error;
+      if (error?.code === 'P2002') {
+        const target = Array.isArray(error?.meta?.target) ? error.meta.target.join(',') : String(error?.meta?.target ?? '');
+        if (target.includes('username')) {
+          throw new CustomError(
+            `Username "${usernameNormalized}" is already taken. Please choose a different username.`,
+            409
+          );
+        }
+        if (target.includes('email')) {
+          throw new CustomError('A user or nurse with this email already exists', 409);
+        }
+        throw new CustomError('A record with this value already exists', 409);
+      }
+      throw error;
+    }
   }
 
   static async getNurseById(id: string): Promise<Nurse | null> {
@@ -196,7 +251,9 @@ export class NurseService {
       updateData.licenseNumber = licenseNumberValue as string | null;
     }
     if (data.specialization !== undefined) updateData.specialization = data.specialization;
-    if (data.experience !== undefined) updateData.experience = data.experience;
+    if (data.experience !== undefined) {
+      updateData.experience = parsePositiveInt(data.experience, 'Experience');
+    }
     if (data.certifications !== undefined) updateData.certifications = data.certifications;
     if (data.hireDate !== undefined) updateData.hireDate = new Date(data.hireDate);
     if (data.dateOfBirth !== undefined) {

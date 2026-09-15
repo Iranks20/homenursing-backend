@@ -64,11 +64,14 @@ export class UserService {
         throw new CustomError('User with this email already exists', 409);
       }
     }
-    const existingByUsername = await prisma.user.findUnique({
-      where: { username: usernameNormalized }
+    const existingByUsername = await prisma.user.findFirst({
+      where: { username: { equals: usernameNormalized, mode: 'insensitive' } },
     });
     if (existingByUsername) {
-      throw new CustomError('Username is already taken', 409);
+      throw new CustomError(
+        `Username "${usernameNormalized}" is already taken. Please choose a different username.`,
+        409
+      );
     }
 
     const hashedPassword = await PasswordService.hashPassword(data.password);
@@ -257,10 +260,16 @@ export class UserService {
     if (data.username !== undefined) {
       const usernameNormalized = data.username.trim().toLowerCase();
       const usernameExists = await prisma.user.findFirst({
-        where: { username: usernameNormalized, id: { not: id } }
+        where: {
+          username: { equals: usernameNormalized, mode: 'insensitive' },
+          id: { not: id },
+        },
       });
       if (usernameExists) {
-        throw new CustomError('Username is already taken', 409);
+        throw new CustomError(
+          `Username "${usernameNormalized}" is already taken. Please choose a different username.`,
+          409
+        );
       }
     }
 
