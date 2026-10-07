@@ -12,6 +12,7 @@ export interface CreatePatientData {
   email?: string | null;
   phone: string;
   dateOfBirth: Date;
+  admissionDate?: Date;
   address: string;
   location?: string;
   condition?: string;
@@ -38,6 +39,7 @@ export interface UpdatePatientData {
   email?: string;
   phone?: string;
   dateOfBirth?: Date;
+  admissionDate?: Date;
   address?: string;
   location?: string;
   condition?: string;
@@ -148,6 +150,7 @@ export class PatientService {
       email: emailVal ?? undefined,
       phone: data.phone,
       dateOfBirth: new Date(data.dateOfBirth),
+      ...(data.admissionDate ? { admissionDate: new Date(data.admissionDate) } : {}),
       address: data.address,
       location: data.location?.trim() || null,
       condition: data.condition ?? '',
@@ -484,6 +487,9 @@ export class PatientService {
     if (data.status !== undefined) updateData.status = data.status;
     if (data.dateOfBirth) {
       updateData.dateOfBirth = new Date(data.dateOfBirth);
+    }
+    if (data.admissionDate) {
+      updateData.admissionDate = new Date(data.admissionDate);
     }
     if (data.emergencyContact !== undefined) updateData.emergencyContact = data.emergencyContact || null;
     if (data.emergencyPhone !== undefined) updateData.emergencyPhone = data.emergencyPhone || null;
