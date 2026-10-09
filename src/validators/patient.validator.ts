@@ -6,7 +6,10 @@ export const createPatientSchema = Joi.object({
   email: Joi.string().email().allow('', null).optional().custom((value) => (value === '' ? null : value)),
   phone: Joi.string().required(),
   dateOfBirth: Joi.date().required(),
-  admissionDate: Joi.date().optional(),
+  admissionDate: Joi.date().required().messages({
+    'any.required': 'Admission date is required',
+    'date.base': 'Admission date must be a valid date',
+  }),
   address: Joi.string().required(),
   location: Joi.string().max(500).allow('', null).optional(),
   condition: Joi.string().min(1).max(500).required().messages({

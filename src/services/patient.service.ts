@@ -12,7 +12,7 @@ export interface CreatePatientData {
   email?: string | null;
   phone: string;
   dateOfBirth: Date;
-  admissionDate?: Date;
+  admissionDate: Date;
   address: string;
   location?: string;
   condition?: string;
@@ -150,7 +150,7 @@ export class PatientService {
       email: emailVal ?? undefined,
       phone: data.phone,
       dateOfBirth: new Date(data.dateOfBirth),
-      ...(data.admissionDate ? { admissionDate: new Date(data.admissionDate) } : {}),
+      admissionDate: new Date(data.admissionDate),
       address: data.address,
       location: data.location?.trim() || null,
       condition: data.condition ?? '',
