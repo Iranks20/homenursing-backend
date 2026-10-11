@@ -416,5 +416,14 @@ export class BillingController {
       next(error);
     }
   }
+
+  static async getPatientBillingTracking(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const rows = await BillingService.getPatientBillingTracking();
+      res.status(200).json({ success: true, data: rows });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 

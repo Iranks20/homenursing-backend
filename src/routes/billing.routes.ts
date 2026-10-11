@@ -18,6 +18,7 @@ router.post('/generate-invoice', BillingController.generateInvoice);
 router.get('/reports/revenue', BillingController.getRevenueReport);
 router.get('/reports/outstanding', BillingController.getOutstandingPayments);
 router.get('/reports/summary', BillingController.getBillingSummary);
+router.get('/reports/patient-billing', BillingController.getPatientBillingTracking);
 router.get('/consultation-providers', BillingController.getConsultationProviders);
 
 export default router;

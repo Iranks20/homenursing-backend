@@ -1,4 +1,11 @@
-import { Notification, NotificationType, NotificationPriority, NotificationCategory, Prisma } from '@prisma/client';
+import {
+  Notification,
+  NotificationType,
+  NotificationPriority,
+  NotificationCategory,
+  PatientBillingFrequency,
+  Prisma,
+} from '@prisma/client';
 import prisma from '../config/database';
 import { logger } from '../utils/logger';
 import { CustomError } from '../middleware/error.middleware';
@@ -173,6 +180,50 @@ export class NotificationService {
 
   static async getUnreadCount(userId: string): Promise<number> {
     return prisma.notification.count({ where: { userId, isRead: false } });
+  }
+
+  static async notifyBillingTeamPatientReady(params: {
+    patientId: string;
+    patientName: string;
+    contractStartDate: Date;
+    billingFrequency: PatientBillingFrequency | null;
+    agreedServiceAmount: number | null;
+  }): Promise<void> {
+    const recipients = await prisma.user.findMany({
+      where: { isActive: true, role: { in: ['ADMIN', 'BILLER'] } },
+      select: { id: true },
+    });
+    if (recipients.length === 0) {
+      return;
+    }
+
+    const startLabel = params.contractStartDate.toISOString().slice(0, 10);
+    const freqLabel =
+      params.billingFrequency === 'DAILY'
+        ? 'per day'
+        : params.billingFrequency === 'MONTHLY'
+          ? 'per month'
+          : 'not set';
+    const amountLabel =
+      params.agreedServiceAmount != null
+        ? `${params.agreedServiceAmount.toLocaleString('en-UG')} UGX`
+        : 'not set';
+
+    const title = 'Patient ready for invoicing';
+    const message = `${params.patientName} has been registered. Contract starts ${startLabel}. Agreed charge: ${amountLabel} ${freqLabel}. Please generate billing for this client.`;
+
+    await Promise.all(
+      recipients.map((user) =>
+        this.createNotification({
+          userId: user.id,
+          title,
+          message,
+          type: NotificationType.INFO,
+          priority: NotificationPriority.HIGH,
+          category: NotificationCategory.BILLING,
+        })
+      )
+    );
   }
 }
 

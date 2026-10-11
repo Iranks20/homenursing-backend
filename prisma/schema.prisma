@@ -105,6 +105,8 @@ model Patient {
   // Status tracking
   currentStage          PatientStage          @default(NEW)
   admissionDate         DateTime              @default(now())
+  billingFrequency      PatientBillingFrequency?
+  agreedServiceAmount   Int?
   avatar                String?
   // Additional patient information
   emergencyContact      String?
@@ -1090,6 +1092,12 @@ enum NotificationCategory {
   HEALTH
   SYSTEM
   GENERAL
+  BILLING
+}
+
+enum PatientBillingFrequency {
+  DAILY
+  MONTHLY
 }
 
 enum SampleType {

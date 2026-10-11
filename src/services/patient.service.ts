@@ -1,8 +1,18 @@
-import { Prisma, Patient, PatientStatus, MedicalRecord, ProgressRecord, PatientCase, CaseAction } from '@prisma/client';
+import {
+  Prisma,
+  Patient,
+  PatientStatus,
+  MedicalRecord,
+  ProgressRecord,
+  PatientCase,
+  CaseAction,
+  PatientBillingFrequency,
+} from '@prisma/client';
 import prisma from '../config/database';
 import { logger } from '../utils/logger';
 import { CustomError } from '../middleware/error.middleware';
 import { BillingService } from './billing.service';
+import { NotificationService } from './notification.service';
 
 /** Service id used for consultation-fee invoice line items (amount = consultant's consultationFee) */
 const CONSULTATION_SERVICE_ID = 'service-consultation';
@@ -13,6 +23,8 @@ export interface CreatePatientData {
   phone: string;
   dateOfBirth: Date;
   admissionDate: Date;
+  billingFrequency: PatientBillingFrequency;
+  agreedServiceAmount: number;
   address: string;
   location?: string;
   condition?: string;
@@ -40,6 +52,8 @@ export interface UpdatePatientData {
   phone?: string;
   dateOfBirth?: Date;
   admissionDate?: Date;
+  billingFrequency?: PatientBillingFrequency;
+  agreedServiceAmount?: number;
   address?: string;
   location?: string;
   condition?: string;
@@ -151,6 +165,8 @@ export class PatientService {
       phone: data.phone,
       dateOfBirth: new Date(data.dateOfBirth),
       admissionDate: new Date(data.admissionDate),
+      billingFrequency: data.billingFrequency,
+      agreedServiceAmount: data.agreedServiceAmount,
       address: data.address,
       location: data.location?.trim() || null,
       condition: data.condition ?? '',
@@ -258,6 +274,21 @@ export class PatientService {
         });
         // Don't fail patient creation if invoice creation fails
       }
+    }
+
+    try {
+      await NotificationService.notifyBillingTeamPatientReady({
+        patientId: patient.id,
+        patientName: patient.name,
+        contractStartDate: patient.admissionDate,
+        billingFrequency: patient.billingFrequency,
+        agreedServiceAmount: patient.agreedServiceAmount,
+      });
+    } catch (notifyError: any) {
+      logger.error('Failed to notify billing team for new patient', {
+        patientId: patient.id,
+        error: notifyError?.message,
+      });
     }
 
     logger.info('Patient created', { patientId: patient.id, email: patient.email });
@@ -490,6 +521,12 @@ export class PatientService {
     }
     if (data.admissionDate) {
       updateData.admissionDate = new Date(data.admissionDate);
+    }
+    if (data.billingFrequency !== undefined) {
+      updateData.billingFrequency = data.billingFrequency;
+    }
+    if (data.agreedServiceAmount !== undefined) {
+      updateData.agreedServiceAmount = data.agreedServiceAmount;
     }
     if (data.emergencyContact !== undefined) updateData.emergencyContact = data.emergencyContact || null;
     if (data.emergencyPhone !== undefined) updateData.emergencyPhone = data.emergencyPhone || null;

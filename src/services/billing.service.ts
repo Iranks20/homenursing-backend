@@ -7,6 +7,8 @@ import {
   UserRole,
   SpecialistStatus,
   TherapistStatus,
+  PatientStatus,
+  PatientBillingFrequency,
 } from '@prisma/client';
 import prisma from '../config/database';
 import { logger } from '../utils/logger';
@@ -165,7 +167,7 @@ const invoicePaymentsInclude = {
 } as const;
 
 const invoiceDetailInclude = {
-  patient: { select: { id: true, name: true, email: true, phone: true } },
+  patient: { select: { id: true, name: true } },
   lineItems: {
     orderBy: { sortOrder: 'asc' as const },
     include: {
@@ -187,7 +189,7 @@ const invoiceDetailInclude = {
 } as const;
 
 const invoiceListInclude = {
-  patient: { select: { id: true, name: true, email: true, phone: true } },
+  patient: { select: { id: true, name: true } },
   lineItems: {
     orderBy: { sortOrder: 'asc' as const },
     include: {
@@ -268,6 +270,23 @@ function parseServiceLineDates(line: InvoiceLineInput): {
 /** 'unpaid' | 'partial' | 'paid' — derived from actual completed payments, independent of the
  * stored InvoiceStatus (which stays PENDING/OVERDUE/PAID). This is what lets the UI show
  * "partially paid" for an installment plan without needing a schema/enum migration. */
+function computeNextBillingDate(
+  contractStart: Date,
+  frequency: PatientBillingFrequency | null,
+  lastInvoiceDate: Date | null
+): Date | null {
+  if (!frequency) return null;
+  const anchor = lastInvoiceDate ?? contractStart;
+  const next = new Date(anchor);
+  if (frequency === PatientBillingFrequency.DAILY) {
+    next.setDate(next.getDate() + 1);
+  } else {
+    next.setMonth(next.getMonth() + 1);
+  }
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
 function derivePaymentStatus(invoiceAmount: number, amountPaid: number, storedPaid: boolean): 'unpaid' | 'partial' | 'paid' {
   if (storedPaid) return 'paid';
   if (amountPaid <= 0) return 'unpaid';
@@ -276,6 +295,7 @@ function derivePaymentStatus(invoiceAmount: number, amountPaid: number, storedPa
 }
 
 function toInvoiceApiShape(invoice: InvoiceWithListRelations | InvoiceWithDetailRelations) {
+  const { patient, ...invoiceCore } = invoice;
   const items = invoice.lineItems ?? [];
   const payments = invoice.payments ?? [];
   const completedPayments = payments.filter((p) => p.status === PaymentStatus.COMPLETED);
@@ -284,9 +304,9 @@ function toInvoiceApiShape(invoice: InvoiceWithListRelations | InvoiceWithDetail
   const latestPaymentMethod = completedPayments[completedPayments.length - 1]?.method;
   const paymentStatus = derivePaymentStatus(invoice.amount, amountPaid, invoice.status === InvoiceStatus.PAID);
   return {
-    ...invoice,
-    patientName: invoice.patient?.name,
-    patientPhone: (invoice.patient as { phone?: string } | null)?.phone,
+    ...invoiceCore,
+    patient: patient ? { id: patient.id, name: patient.name } : null,
+    patientName: patient?.name,
     serviceName: summarizeLineServiceNames(items),
     paymentMethod: latestPaymentMethod != null ? String(latestPaymentMethod) : undefined,
     amountPaid,
@@ -1473,6 +1493,67 @@ export class BillingService {
 
     logger.info('Payment processed', { paymentId: payment.id, invoiceId: invoice.id, amount: data.amount });
     return payment;
+  }
+
+  static async getPatientBillingTracking() {
+    const patients = await prisma.patient.findMany({
+      where: { status: PatientStatus.ACTIVE },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        admissionDate: true,
+        billingFrequency: true,
+        agreedServiceAmount: true,
+        invoices: {
+          where: { archivedAt: null },
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            date: true,
+            payments: {
+              where: { status: PaymentStatus.COMPLETED },
+              select: { amount: true },
+            },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return patients.map((p) => {
+      let outstanding = 0;
+      let paidCount = 0;
+      let lastInvoiceDate: Date | null = null;
+      for (const inv of p.invoices) {
+        const paid = inv.payments.reduce((sum, pay) => sum + pay.amount, 0);
+        outstanding += Math.max(0, inv.amount - paid);
+        if (inv.status === InvoiceStatus.PAID || paid >= inv.amount) {
+          paidCount += 1;
+        }
+        if (!lastInvoiceDate || inv.date.getTime() > lastInvoiceDate.getTime()) {
+          lastInvoiceDate = inv.date;
+        }
+      }
+      const nextBillingDate = computeNextBillingDate(
+        p.admissionDate,
+        p.billingFrequency,
+        lastInvoiceDate
+      );
+      return {
+        patientId: p.id,
+        patientName: p.name,
+        status: p.status,
+        contractStartDate: p.admissionDate.toISOString(),
+        billingFrequency: p.billingFrequency,
+        agreedServiceAmount: p.agreedServiceAmount,
+        invoiceCount: p.invoices.length,
+        paidInvoiceCount: paidCount,
+        outstandingAmount: round2(outstanding),
+        nextBillingDate: nextBillingDate?.toISOString() ?? null,
+      };
+    });
   }
 }
 

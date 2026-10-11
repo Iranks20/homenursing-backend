@@ -7,8 +7,14 @@ export const createPatientSchema = Joi.object({
   phone: Joi.string().required(),
   dateOfBirth: Joi.date().required(),
   admissionDate: Joi.date().required().messages({
-    'any.required': 'Admission date is required',
-    'date.base': 'Admission date must be a valid date',
+    'any.required': 'Contract / service start date is required',
+    'date.base': 'Contract / service start date must be a valid date',
+  }),
+  billingFrequency: Joi.string().valid('DAILY', 'MONTHLY').required().messages({
+    'any.required': 'Billing frequency (per day or per month) is required',
+  }),
+  agreedServiceAmount: Joi.number().integer().min(0).required().messages({
+    'any.required': 'Agreed service amount is required',
   }),
   address: Joi.string().required(),
   location: Joi.string().max(500).allow('', null).optional(),
@@ -78,6 +84,8 @@ export const updatePatientSchema = Joi.object({
   phone: Joi.string().optional(),
   dateOfBirth: Joi.date().optional(),
   admissionDate: Joi.date().optional(),
+  billingFrequency: Joi.string().valid('DAILY', 'MONTHLY').optional(),
+  agreedServiceAmount: Joi.number().integer().min(0).optional(),
   address: Joi.string().optional(),
   location: Joi.string().max(500).allow('', null).optional(),
   condition: Joi.string().allow(null).optional().empty('').empty(null).default(null),
